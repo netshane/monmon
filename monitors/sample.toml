@@ -1,0 +1,401 @@
+[settings]
+name = "xyz"
+description = "This monitors the xyz"
+link = "https://example.com/externaldocs/support.md"
+
+template = "base.toml" # Use the settings from this template.  Settings in this file override template settings
+                       # templates should be able to chain.
+                       # this should allow paths that are relative to the monitors folder, or absolute paths
+
+monitor_type_alert = true
+monitor_type_report = false
+
+tags = ["nightly", "batch"] # free form labels.  html reports can select monitors by tag
+                            # (a space or comma delimited string works too)
+
+active = false # whether this should run or not
+
+[connections]
+# connections defined here should be added to the list of connections available
+# from the settings file
+aws_dev = ""
+es_prd = {host = "example.es.example.com", default_index = "index.example.com*"}
+# a table with a docker_host is a docker connection.  Only unix://, npipe://
+# and ssh:// hosts are supported
+docker_local = {docker_host = "unix:///var/run/docker.sock"}
+docker_windows = {docker_host = "npipe:////./pipe/docker_engine"}
+docker_remote = {docker_host = "ssh://user@remotehost:22"}
+
+[schedule]
+cron = "xxxxx" # takes a crontab formatted schedule, if specified this overrides other settings besides start_time and end_time
+daily = true
+days_of_week = "S M Tu W Th F Sa" # Specify a space delimited string of the days of week to run monitor on
+repeat = "5 min" # time period to rerun the task
+start_time = ""  # time of day to start running the task
+end_time = ""    # time of day to stop running the task
+
+# a run ending in one of these statuses takes the monitor off the cadence above
+# and re-runs it after the given delay, until it runs ok again.  Same time
+# format as `repeat` (a bare number means minutes).  0 turns the recheck off,
+# unset inherits the [schedule] default from settings.toml
+recheck_after_skipped = "15 min"
+recheck_after_error = "1 hour"
+recheck_after_alert = "30 min"
+recheck_max_attempts = 3  # rechecks before going back on the normal schedule
+                          # (0 = keep rechecking while it keeps failing)
+
+[hierarchy]
+# creates a parent child chain
+# should generate a warning if the hierarchy is broken
+# this is an optional section
+node_name = "server 123"
+parent_node = "server group 1"
+skip_on_parent_fail = true    # don't run this monitor if the parent has failed
+alert_on_parent_fail = false  # place monitor in alert state if parent has failed
+
+[hierarchy.A]
+# alternate hierarchy "A"
+# should be handled the same as the primary hierarchy just separately
+node_name = "app 123"
+parent_node = "app group 1"
+skip_on_parent_fail = true    # don't run this monitor if the parent has failed
+alert_on_parent_fail = false  # place monitor in alert state if parent has failed
+
+[hierarchy.B]
+# alternate hierarchy "B"
+# should be handled the same as the primary hierarchy just separately
+node_name = "app 123"
+parent_node = "nework aws"
+skip_on_parent_fail = true    # don't run this monitor if the parent has failed
+alert_on_parent_fail = false  # place monitor in alert state if parent has failed
+
+[contact]
+# Every contact is written as "<channel>:<target>":
+#   email:<address>            e.g. "email:ops@example.com"
+#   email:<name>:<address>     e.g. "email:Ops Team:ops@example.com"
+#   slack:#<channel>           e.g. "slack:#monitoring"
+#   slack:@<person>            e.g. "slack:@shane"
+#   teams:#<channel>           e.g. "teams:#monitoring"
+#   teams:@<person>            e.g. "teams:@shane"
+#   file:<path>                e.g. "file:output/report.txt" - overwrites the file
+#   file_append:<path>         e.g. "file_append:output/report.txt" - appends to it
+#   text:<phone_number>        e.g. "text:+14155551212" - sent through the
+#                              provider configured in settings.toml [text]
+# Slack and Teams targets must start with # (channel) or @ (person), email
+# addresses must be well formed, phone numbers must look like a permissive
+# E.164 number, and file paths (relative to the working directory the monitor
+# process runs in) must be writable - anything else fails to load the
+# monitor.  Missing directories are created automatically, and a ".html" path
+# renders the html template instead of the plain text one.
+
+# notified whenever this monitor generates alerts
+alert = [
+    "email:ops@example.com",
+    "slack:#monitoring",
+]
+
+# notified with any errors or exceptions raised while running the monitor
+error = []
+
+# notified every run with all tests that ran and their results
+info = []
+
+# notified every run with a short monitor name / result / run time message
+notify = []
+
+# notified whenever a report monitor completes successfully, with the report
+# tables and the messages of all tests
+report = []
+
+combine_reports = true # if true, combine the reports into a single notification
+combine_alerts = true  # if true, combine all alerts into a single notification before
+                       # sending, otherwise send each alert as it arises
+
+# Message templates ---------------------------------------------------------
+#
+# [contact.message.<type>.<channel>] overrides the wording of one notification.
+# <type> is alert / report / info / notify / error, <channel> is email / slack /
+# teams / file / file_append / text.  Anything not set here is inherited from this
+# monitor's template chain, then from settings.toml, then from the built in
+# default - so overriding only `body` keeps the `subject` you inherited.
+#
+# `batch_subject` may only be set in settings.toml, never here.
+#
+# Fields: subject, body (alias `message`), and html for email and the file
+# channels (used when the file target ends in ".html").
+# Templates are jinja2 and are compiled when the monitor loads, so a syntax
+# error fails the monitor load rather than the notification.
+#
+# Variables: name, description, link, tags, alert, reports, test_results,
+# started_at, duration_seconds, status, contact, contact_type, contact_channel.
+# Filters: `report | table`, `report | html_table`, `started_at | datetime`.
+# An undefined variable renders as "(Undefined)" rather than failing.
+#
+# The plain text email and file bodies are rendered as typed.  Html bodies and
+# chat messages escape their variables, so a value coming back from a
+# monitored system cannot inject markup.
+
+[contact.message.alert.email]
+subject = "alert: {{ name }} - {{ alert.name or alert.message }}"
+body = """
+{{ alert.message }} on {{ name }}
+{% if alert.value is not none %}
+  value {{ alert.value }} (threshold {{ alert.threshold }})
+{% endif %}
+{% if link %}
+  {{ link }}
+{% endif %}
+"""
+
+[contact.message.alert.slack]
+# chat channels read better with `message`, which is just another name for `body`
+message = "*{{ name }}* {{ alert.message }}"
+
+[contact.message.report.email]
+subject = "report: {{ name }}"
+body = """
+{% for report in reports %}
+{{ report.title }} - {{ report.row_count }} row(s)
+
+{{ report | table }}
+
+{% endfor %}
+"""
+html = """
+{% for report in reports %}
+<h3>{{ report.title }}</h3>
+{{ report | html_table }}
+{% endfor %}
+"""
+
+[test.ping]
+# ping the server or servers listed and generate an alert if they cannot be reached
+key = "network.appgroup.app.ping"  # a unique identifier for the monitor used to store results
+server = "example.com"
+servers = [
+"123.123.123.123",
+"foo.com",
+]
+
+[test.docker_container_running]
+# alerts when a named container is not running, or does not exist
+key = "network.appgroup.app.docker"  # a unique identifier for the monitor used to store results
+connection = "docker_remote" # a docker connection name; omit to use the local docker
+container_name = "my_container"
+container_names = [
+"my_container1",
+"my_container2",
+]
+require_healthy = false  # alert when a container is running but its healthcheck is unhealthy
+allow_restarting = false # treat a restarting container as running
+
+[test.dbflag]
+# Test consists of a query that returns a scalar
+# The test generates an alert if the scalar is greater than 0, the alert will return the scalar value
+# connection comes from global config
+key = "network.appgroup.app.dbflag"  # a unique identifier for the monitor used to store results
+connection = "db_aws" # this should create a connection using the depencies method get_db
+query =  """ 
+SELECT 
+    COUNT(*) 
+FROM Monitors AS a
+WHERE a.Monitor = 'SomeMonitor' 
+  AND a.Status = 'Failed'
+  AND a.ScanDate > DATEADD(day, -1, GETDATE())
+"""
+
+[test.dbthreshold]
+# Test consists of a query that returns at least a column called Name, and a column called Value
+# The monitor will generate an alert for any row where the Value column is greater than the specified threshold
+# The alert will return the Name column, the Value, the threshold, and anything in a column called Details if present
+key = "network.appgroup.app.moncount"  # a unique identifier for the monitor used to store results
+connection = "db_aws" # this should create a connection using the depencies method get_db
+threshold = 4.2
+query =  """ 
+SELECT 
+	a.Monitor AS [Name],
+	COUNT(*) AS [Value],
+	'Some descripption' AS [Details]
+FROM Monitors AS a
+GROUP BY a.Montitor	
+"""
+
+[test.dbnorows]
+# Test consists of a query that is expected to return no rows
+# The monitor generates an alert if any rows come back; the returned rows are
+# listed in the alert details, capped by max_rows
+key = "network.appgroup.app.norows"  # a unique identifier for the monitor used to store results
+connection = "db_aws" # this should create a connection using the depencies method get_db
+max_rows = 50 # optional, how many rows to list in the alert (default 50)
+query = """
+SELECT
+	a.Monitor AS [Name],
+    a.ScanDate AS [ScanDate],
+    a.Status AS [Status]
+FROM Monitors AS a
+WHERE a.Status = 'Failed'
+  AND a.ScanDate > DATEADD(day, -1, GETDATE())
+"""
+
+[test.dbreport]
+# Monitor generates a report that consists of a table of the columns returned
+# 
+key = "network.appgroup.app.metric"  # a unique identifier for the monitor used to store results
+connection = "db_aws" # this should create a connection using the depencies method get_db
+notify_if_empty = false  # default value, set to true to notify even if no rows
+query = """
+SELECT 
+	a.Monitor AS [Name],
+    a.ScanDate AS [ScanDate],
+    a.Status AS [Status]
+FROM Monitors AS a
+WHERE a.Monitor = 'SomeMonitor' 
+  AND a.ScanDate > DATEADD(day, -1, GETDATE())
+"""
+
+[test.ssa_job_succeeded]
+# Connects to a SQL Server instance (msdb.dbo.sysjobhistory) and checks the
+# most recent run of the named SQL Server Agent job within timeframe.
+# Alerts if no run is found in timeframe, or if the latest run's status is
+# anything other than Succeeded or In Progress.
+key = "aws_db.MyJobName.succeeded"  # a unique identifier for the monitor used to store results
+connection = "db_aws" # this should create a connection using the depencies method get_db
+job_name = "MyJobName" # the SQL Server Agent job name, as it appears in sysjobs
+timeframe = "2 hours"  # how far back to look for a run; optional, default "1 day"
+
+[test.ssa_job_errors]
+# Connects to a SQL Server instance (msdb.dbo.sysjobhistory) and reports any
+# failed runs of the named SQL Server Agent job within timeframe.
+key = "aws_db.MyJobName.errors"  # a unique identifier for the monitor used to store results
+connection = "db_aws" # this should create a connection using the depencies method get_db
+job_name = "MyJobName" # the SQL Server Agent job name, as it appears in sysjobs
+timeframe = "2 hours"  # how far back to look for failed runs; optional, default "1 day"
+notify_if_empty = false  # default value, set to true to notify even if no failed runs
+
+[test.opensearch_flag]
+# Monitor will run the elastic search query in the query setting and will extract the first value
+# specified by jq.  If this value exists and is greater than 0, it will generate an alert
+# values delimited by {{> <}} should be evaluated
+key = "network.appgroup.app.metric"  # a unique identifier for the monitor used to store results
+connection = "es_prd" # this should create a connection using the dependencies method get_opensearch_service
+jq = ".properties.count"
+query = """
+{
+	"sort": [
+		{
+			"Timestamp": {
+				"order": "desc",
+				"unmapped_type": "boolean"
+			}
+		}
+	],
+	"query": {
+		"bool": {
+			"must": [],
+			"filter": [
+				{
+					"match_all": {}
+				},
+				{
+					"match_phrase": {
+						"Level": "Information"
+					}
+				},
+				{
+					"match_phrase": {
+						"Properties.Application": "SomeApplication"
+					}
+				},
+				{
+					"range": {
+						"Timestamp": {
+							"gte": "{{>today_iso_format<}}",
+							"lte": "{{>yesterday_io_format<}}",
+							"format": "strict_date_optional_time"
+						}
+					}
+				}
+			],
+			"should": [],
+			"must_not": []
+		}
+	}
+ }
+"""
+
+[test.opensearch_report]
+# Monitor will run the elastic search query in the query setting and will extract values specified
+# by jqs.  These will be put into a table and displayed as a report
+# values delimited by {{> <}} should be evaluated
+key = "network.appgroup.app.metric"  # a unique identifier for the monitor used to store results
+connection = "es"
+notify_if_empty = false  # default value, set to true to notify even if no rows
+maxlength=250  # trim fields to max length
+jqs = [
+	".application.name",
+	".properties.count",
+	".properties.msg",
+]
+query = """
+"""
+
+[test.html_200]
+# monitor will attempt to load a web page and will alert if anything other than a 200 is found (it will follow redirects)
+key = "network.appgroup.app.html"  # a unique identifier for the monitor used to store results
+url = "https://example.com/app/health"
+
+
+# a test section may name an instance - [test.<test_type>.<instance>] - so the
+# same test type can appear more than once in a monitor.  a custom test names
+# its instance one segment later: [test.custom.magic_py.instance1]
+[test.html_200.home]
+key = "network.appgroup.app.home"  # without a key this would be "<monitor>.html_200.home"
+url = "https://example.com/"
+
+[test.html_200.docs]
+key = "network.appgroup.app.docs"
+url = "https://example.com/docs"
+
+
+[test.html_json_exists]
+# monitor will load a web page as json and check to see if a json string exists
+key = "network.appgroup.app.html"  # a unique identifier for the monitor used to store results
+url = "https://example.com/app/health"
+jq = ".health.healthy"
+
+
+[test.html_json_value]
+# montior will load a web page, parse it as json, and alert if the given json key does not equal the specified value
+key = "network.appgroup.app.html"  # a unique identifier for the monitor used to store results
+url = "https://example.com/app/health"
+jq = ".health.healthy"
+value = "1"
+
+[test.html_json_report]
+# Query the provided URL
+# Generate a report based on the JSON response using the provided jq expressions
+# Store the report in structured text in the monitor results for later retrieval and reporting
+key = "app.report"
+notify_if_empty = false  # default value, set to true to notify even if no rows
+url = "https://app.example.com/api/health/check"
+jq = [
+    ".databaseServer",
+    ".machineName",
+    ".assemblyVersion",
+]
+
+
+[test.custom.magic_py]
+# run the command test in the module magic_py stored in the custom_tests folder 
+# the command will return either a report object or an alert object
+# the values in args should be evaluated for value expansion using the delimiters {{><}}
+# alert = {}
+# report = [
+# ]
+key = "network.appgroup.app.html"  # a unique identifier for the monitor used to store results
+command = "test_run"
+args = [
+	"123",
+	"some-server.com",
+	"{{>today<}}",
+]

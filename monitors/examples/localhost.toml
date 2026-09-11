@@ -1,0 +1,40 @@
+[settings]
+name = "localhost"
+description = "End to end example: pings the loopback address and reports disk usage"
+link = "https://example.com/externaldocs/support.md"
+
+template = "base.toml"
+
+monitor_type_alert = true
+monitor_type_report = true
+
+active = true
+
+[schedule]
+daily = true
+repeat = "15 min"
+days_of_week = "M Tu W Th F Sa S"
+start_time = "00:00"
+end_time = "23:59"
+
+[hierarchy]
+node_name = "localhost"
+
+[contact]
+alert = []
+report = []
+combine_alerts = true
+combine_reports = true
+
+[test.ping]
+key = "local.loopback.ping"
+server = "127.0.0.1"
+
+[test.custom.example_check]
+key = "local.loopback.disk"
+command = "check_disk_space"
+args = [
+	"/",
+	"90",
+	"{{>today<}}",
+]

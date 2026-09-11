@@ -1,0 +1,45 @@
+# Default html report.
+#
+# Rendered with:  monmon.py generate-report            (uses this folder)
+#                 monmon.py generate-report --all      (renders every folder)
+#
+# Output:  output/default/index.html
+
+title: "Monitor Overview"
+subtitle: "Run history, errors and alerts"
+
+# optional branding shown in the page header - any keys the template uses
+branding:
+  organization: "Monitoring"
+
+# sections to render.  May also be given as a list of the sections to show.
+sections:
+  summary: true
+  successes: true
+  run_times: true
+  errors: true
+  alerts: true
+
+# history to load for the summary / errors / alerts sections when no field
+# asks for a longer window
+default_window: 30d
+
+monitors:
+  # `match` accepts a monitor name or a glob pattern (a list of either works
+  # too).  `tags` matches the `tags` key in a monitor's [settings] section,
+  # and `exclude` drops matches back out again.
+  - match: "*"
+    fields:
+      # one value - the most recent one recorded
+      status:
+        mode: latest
+
+      # a list of values over a window
+      run_time:
+        mode: range
+        last: 30d
+
+      # `since` / `until` may be used instead of `last`
+      errors:
+        mode: range
+        last: 7d

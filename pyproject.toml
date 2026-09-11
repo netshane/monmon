@@ -1,0 +1,44 @@
+[project]
+name = "monmon2"
+version = "0.2.5"
+description = "Runs monitors, alerts, and reports defined as toml files"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "click",
+    "loguru",
+    "jsonpickle",
+    "pip_system_certs",
+    "SQLAlchemy",
+    "pyodbc",
+    "mssql-python",
+    "opensearch-py>=3.2.0",
+    "requests-aws4auth>=1.3.2",
+    "croniter>=6.2.4",
+    "jinja2>=3.1.6",
+    "pyyaml>=6.0.3",
+    "twilio>=9.0.0",
+    "python-dotenv>=1.2.3",
+    "docker[ssh]>=7.1.0",
+    "nscomponents",
+]
+
+[dependency-groups]
+dev = [
+    "pysonar>=1.7.0.5143",
+]
+test = [
+    "pytest",
+]
+
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: mark a test as a unit test",
+    "slow: mark a test as slow",
+    "unit_external: mark a test that equires external resources",
+    "integration: mark a test as an integration test that should not be run without an environment set up",
+]
+
+[tool.uv.sources]
+nscomponents = { git = "https://github.com/netshane/nscomponents" }

@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1c2128;
+    --muted: #5b6472;
+    --line: #dfe3e8;
+    --ok: #1a7f47;
+    --alert: #b8860b;
+    --error: #b3261e;
+    --skipped: #5b6472;
+    --accent: #2f5bea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c;
+      --panel: #1c2027;
+      --ink: #e7eaf0;
+      --muted: #98a2b3;
+      --line: #2d333d;
+      --ok: #4ec27f;
+      --alert: #e0b341;
+      --error: #f2776c;
+      --skipped: #98a2b3;
+      --accent: #7aa2ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem 1.25rem 4rem;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .page { max-width: 1100px; margin: 0 auto; }
+  header.page-head { margin-bottom: 1.5rem; }
+  header.page-head .brand { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; }
+  h1 { margin: .2rem 0 .3rem; font-size: 1.7rem; }
+  h2 { margin: 0 0 .75rem; font-size: 1.1rem; }
+  h3 { margin: 0 0 .4rem; font-size: .95rem; }
+  .sub, .meta { color: var(--muted); font-size: .85rem; }
+  .meta.rows { white-space: pre-wrap; overflow-wrap: anywhere; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem 1.25rem; margin-bottom: 1.25rem; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; }
+  .tile { border: 1px solid var(--line); border-radius: 8px; padding: .7rem .8rem; }
+  .tile .label { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+  .tile .value { font-size: 1.5rem; font-weight: 600; margin-top: .2rem; }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+  th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  th[data-sort] { cursor: pointer; user-select: none; }
+  th[data-sort]:hover { color: var(--accent); }
+  th[data-sort]::after { content: " \2195"; opacity: .35; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .status { font-weight: 600; }
+  .status-ok { color: var(--ok); }
+  .status-alert { color: var(--alert); }
+  .status-error { color: var(--error); }
+  .status-skipped, .status-inactive, .status-none { color: var(--skipped); }
+  .empty { color: var(--muted); font-style: italic; padding: .4rem 0; }
+  .filter { margin-bottom: .75rem; }
+  .filter input { width: 100%; max-width: 320px; padding: .4rem .55rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: .88rem; }
+  .sparkline { color: var(--accent); display: block; width: 120px; height: 24px; }
+  .tag { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 0 .5rem; font-size: .72rem; color: var(--muted); margin-right: .25rem; }
+  .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: .75rem; margin-top: .6rem; }
+  .field { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .7rem; }
+  .field .label { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+  .field .value { font-size: 1.05rem; font-weight: 600; margin: .15rem 0; word-break: break-word; }
+  .monitor { border-top: 1px solid var(--line); padding-top: 1rem; margin-top: 1rem; }
+  .monitor:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+  a { color: var(--accent); }
+  footer { color: var(--muted); font-size: .8rem; text-align: center; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="page-head">
+  {% if branding.organization %}
+  <div class="brand">{{ branding.organization }}</div>
+  {% endif %}
+  <h1>{{ title }}</h1>
+  {% if subtitle %}<div class="sub">{{ subtitle }}</div>{% endif %}
+  <div class="meta">
+    Generated {{ generated_at | datetime }}
+    {% if window.since %}&middot; covering runs since {{ window.since | datetime("%Y-%m-%d") }}{% endif %}
+  </div>
+</header>
+
+{% if sections.summary %}
+<section>
+  <h2>Health summary</h2>
+  <div class="tiles">
+    <div class="tile">
+      <div class="label">Uptime</div>
+      <div class="value">{{ summary.uptime_pct | percent }}</div>
+    </div>
+    <div class="tile">
+      <div class="label">Monitors</div>
+      <div class="value">{{ summary.monitor_count }}</div>
+    </div>
+    <div class="tile">
+      <div class="label">Failing now</div>
+      <div class="value {{ 'status-error' if summary.failing else 'status-ok' }}">{{ summary.failing | length }}</div>
+    </div>
+    <div class="tile">
+      <div class="label">Runs</div>
+      <div class="value">{{ summary.total_runs }}</div>
+    </div>
+    <div class="tile">
+      <div class="label">Failed runs</div>
+      <div class="value">{{ summary.failure_count }}</div>
+    </div>
+    <div class="tile">
+      <div class="label">Alerts</div>
+      <div class="value">{{ summary.alert_count }}</div>
+    </div>
+  </div>
+  {% if summary.failing %}
+  <p class="meta">Currently failing: {{ summary.failing | join(", ") }}</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if sections.successes %}
+<section>
+  <h2>Monitors</h2>
+  {% if monitors %}
+  <div class="filter">
+    <input type="search" data-filter="monitor-table" placeholder="Filter monitors&hellip;" aria-label="Filter monitors">
+  </div>
+  <div class="table-wrap">
+    <table id="monitor-table" data-sortable>
+      <thead>
+        <tr>
+          <th data-sort="text">Monitor</th>
+          <th data-sort="text">Last status</th>
+          <th data-sort="date">Last run</th>
+          <th data-sort="number" class="num">Runs</th>
+          <th data-sort="number" class="num">Ok</th>
+          <th data-sort="number" class="num">Failed</th>
+          <th data-sort="number" class="num">Uptime</th>
+          <th data-sort="number" class="num">Avg run</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for monitor in monitors %}
+        <tr>
+          <td>
+            {% if monitor.link %}<a href="{{ monitor.link }}">{{ monitor.name }}</a>{% else %}{{ monitor.name }}{% endif %}
+            {% for tag in monitor.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+          </td>
+          <td class="status status-{{ monitor.last_status or 'none' }}">{{ monitor.last_status or "-" }}</td>
+          <td data-value="{{ monitor.last_run_at | datetime }}">{{ monitor.last_run_at | datetime }}</td>
+          <td class="num">{{ monitor.stats.total_runs }}</td>
+          <td class="num">{{ monitor.stats.success_count }}</td>
+          <td class="num">{{ monitor.stats.failure_count }}</td>
+          <td class="num" data-value="{{ monitor.stats.uptime_pct if monitor.stats.uptime_pct is not none else -1 }}">{{ monitor.stats.uptime_pct | percent }}</td>
+          <td class="num" data-value="{{ monitor.stats.avg_duration or 0 }}">{{ monitor.stats.avg_duration | duration }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No monitors matched this report.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if sections.run_times %}
+<section>
+  <h2>Fields</h2>
+  {% if monitors %}
+  {% for monitor in monitors %}
+  <div class="monitor">
+    <h3>{{ monitor.name }}</h3>
+    {% if monitor.description %}<div class="meta">{{ monitor.description }}</div>{% endif %}
+    {% if monitor.fields %}
+    <div class="field-grid">
+      {% for field in monitor.fields.values() %}
+      <div class="field">
+        <div class="label">{{ field.label }} &middot; {{ field.mode }}</div>
+        {% if field.mode == "latest" %}
+          <div class="value {{ 'status status-' ~ field.value if field.name == 'status' and field.value else '' }}">
+            {{ field.value if field.value is not none else "-" }}
+          </div>
+          <div class="meta">{{ field.at | datetime if field.at else "no data" }}</div>
+        {% else %}
+          {% if field.count %}
+            {% if field.numbers %}
+            <div class="value">{{ field.avg | number }} avg</div>
+            {{ field.numbers | sparkline }}
+            <div class="meta">
+              min {{ field.min | number }} &middot; max {{ field.max | number }} &middot; {{ field.count }} value(s)
+            </div>
+            {% else %}
+            <div class="value">{{ field.count }} value(s)</div>
+            <div class="meta">latest: {{ field.value }}</div>
+            {% endif %}
+          {% else %}
+            <div class="value">-</div>
+            <div class="meta">no values in window</div>
+          {% endif %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">No fields configured for this monitor.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <p class="empty">No monitors matched this report.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if sections.errors %}
+<section>
+  <h2>Errors</h2>
+  {% if errors %}
+  <div class="filter">
+    <input type="search" data-filter="error-table" placeholder="Filter errors&hellip;" aria-label="Filter errors">
+  </div>
+  <div class="table-wrap">
+    <table id="error-table" data-sortable>
+      <thead>
+        <tr>
+          <th data-sort="date">When</th>
+          <th data-sort="text">Monitor</th>
+          <th data-sort="text">Test</th>
+          <th data-sort="text">Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for error in errors %}
+        <tr>
+          <td data-value="{{ error.at | datetime }}">{{ error.at | datetime }}</td>
+          <td>{{ error.monitor }}</td>
+          <td>{{ error.test_key or "-" }}</td>
+          <td>{{ error.message }}{% if error.detail %}<div class="meta">{{ error.detail }}</div>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No errors recorded in this window.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if sections.alerts %}
+<section>
+  <h2>Alerts</h2>
+  {% if alerts %}
+  <div class="filter">
+    <input type="search" data-filter="alert-table" placeholder="Filter alerts&hellip;" aria-label="Filter alerts">
+  </div>
+  <div class="table-wrap">
+    <table id="alert-table" data-sortable>
+      <thead>
+        <tr>
+          <th data-sort="date">When</th>
+          <th data-sort="text">Monitor</th>
+          <th data-sort="text">Alert</th>
+          <th data-sort="text">Message</th>
+          <th data-sort="text">Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for alert in alerts %}
+        <tr>
+          <td data-value="{{ alert.at | datetime }}">{{ alert.at | datetime }}</td>
+          <td>{{ alert.monitor }}</td>
+          <td>{{ alert.name or alert.test_key or "-" }}</td>
+          <td>{{ alert.message }}{% if alert.details %}<div class="meta rows">{{ alert.details }}</div>{% endif %}</td>
+          <td>
+            {{ alert.value if alert.value is not none else "-" }}
+            {% if alert.threshold is not none %}<div class="meta">threshold {{ alert.threshold }}</div>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No alerts recorded in this window.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<footer>
+  {{ report_name }} &middot; generated {{ generated_at | datetime }}
+</footer>
+
+</div>
+<script>
+// no framework, no network - sorting and filtering for the tables above
+(function () {
+  function cellValue(row, index) {
+    var cell = row.cells[index];
+    if (!cell) return "";
+    return cell.dataset.value !== undefined ? cell.dataset.value : cell.textContent.trim();
+  }
+
+  function comparer(index, kind, ascending) {
+    return function (a, b) {
+      var left = cellValue(a, index);
+      var right = cellValue(b, index);
+      var result;
+      if (kind === "number") {
+        result = (parseFloat(left) || 0) - (parseFloat(right) || 0);
+      } else {
+        result = left.localeCompare(right, undefined, { numeric: true });
+      }
+      return ascending ? result : -result;
+    };
+  }
+
+  document.querySelectorAll("table[data-sortable]").forEach(function (table) {
+    table.querySelectorAll("th[data-sort]").forEach(function (header) {
+      header.addEventListener("click", function () {
+        var body = table.tBodies[0];
+        var ascending = header.dataset.order !== "asc";
+        var rows = Array.prototype.slice.call(body.rows);
+        // cellIndex, not the position among sortable headers - a column
+        // without data-sort must not shift the others
+        rows.sort(comparer(header.cellIndex, header.dataset.sort, ascending));
+        rows.forEach(function (row) { body.appendChild(row); });
+        table.querySelectorAll("th[data-sort]").forEach(function (other) {
+          delete other.dataset.order;
+        });
+        header.dataset.order = ascending ? "asc" : "desc";
+      });
+    });
+  });
+
+  document.querySelectorAll("input[data-filter]").forEach(function (input) {
+    input.addEventListener("input", function () {
+      var table = document.getElementById(input.dataset.filter);
+      if (!table) return;
+      var needle = input.value.toLowerCase();
+      Array.prototype.slice.call(table.tBodies[0].rows).forEach(function (row) {
+        row.style.display = row.textContent.toLowerCase().indexOf(needle) === -1 ? "none" : "";
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

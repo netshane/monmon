@@ -1,0 +1,18 @@
+[settings]
+name = "base template"
+description = "This is the base template for all monitors.  It should be used as a template for all other monitors."
+
+active = false
+
+monitor_type_alert = false
+monitor_type_report = false
+
+[hierarchy]
+skip_on_parent_fail = true
+alert_on_parent_fail = false
+
+
+[contact]
+combine_reports = true
+combine_alerts = false
+

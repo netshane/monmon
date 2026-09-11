@@ -1,0 +1,361 @@
+[default]
+
+# folder scanned recursively for monitor definitions (all *.toml files)
+# if overriden by an extern settings file, the path is relative to that file, not this one.
+monitors_path = "./monitors"
+
+# folder holding python modules used by [test.custom.<module>] sections
+# if overriden by an extern settings file, the path is relative to that file, not this one.
+custom_tests_path = "./custom_tests"
+
+# toml files with these names are excluded from being loaded as monitors
+# (templates, and the annotated sample file)
+monitor_template_names = ["base.toml", "sample.toml"]
+
+# html report definitions (one folder per report), and where generated pages
+# are written by `generate-report`
+# if overriden by an extern settings file, the path is relative to that file, not this one.
+reports_path = "./reports"
+reports_output_path = "./output"
+
+# where monitor run history and last run times are stored.  This is a
+# SQLAlchemy url - switching to postgres is a change to this line only, e.g.
+# "postgresql+psycopg://monitor:{passwd}@dbhost/monitors"
+# if overriden by an extern settings file, the path is relative to that file, not this one.
+results_db = "sqlite:///monitors.db"
+
+#environment-env_prefix = "TEMPLATE_"
+#environment-env_only = [
+#    "aws_db_password",
+#]
+
+# -- schedule rechecks --------------------------------------------------------
+# A monitor left in one of these statuses comes off its normal cadence and is
+# re-run this long after its last run, until it runs `ok` again.  Intervals are
+# human readable ("30s", "5 min", "2 hours"); a bare number means minutes.
+# 0 or absent = no recheck, the monitor keeps its normal schedule.
+# Every key here can be overridden per monitor in its own [schedule] section.
+[default.schedule]
+recheck_after_skipped = 0
+recheck_after_error = 0
+recheck_after_alert = 0
+
+# how many times a monitor is retried after the run that first failed.  Once
+# the cap is reached the monitor goes back on its normal schedule.  The count
+# is derived from run history and resets when the monitor next runs `ok`.
+# 0 or absent = retry for as long as the monitor keeps failing
+recheck_max_attempts = 0
+
+[default.connections]
+db_example = "mssql+mssql-python://Server=db-server.example.local;Database=AT_BI_DataStore;TrustServerCertificate=yes;Encrypt=yes;Trusted_Connection=yes"
+db_aws = "mssql+mssql-python://Server=remote-db-server.aws-example.local;Database=MyDb;UID=some.user;PWD={passwd};TrustServerCertificate=yes;Encrypt=yes;"
+
+es_prd = {host = "example.es.example.com", default_index = "idx.example.com*"}
+
+# -- notification message templates ------------------------------------------
+#
+# Every notification is rendered from a jinja2 template named
+# [contact.message.<type>.<channel>], where <type> is one of alert, report,
+# info, notify, error and <channel> is one of email, slack, teams, file,
+# file_append, text.
+#
+# Fields:
+#   subject       the message subject
+#   body          the message text ("message" is accepted as an alias, and
+#                 reads better for slack / teams)
+#   html          an html alternative - email and the file channels only.  A
+#                 file target ending in ".html" writes this instead of body.
+#   batch_subject the subject of a combined notification.  It may only be set
+#                 here, never in a monitor.  If it renders empty the subject of
+#                 the first monitor in the batch is used.
+#
+# A monitor may override any field in its own [contact.message.<type>.<channel>]
+# section; fields it does not set are inherited from here, and anything not set
+# here falls back to the built in template in locallib/message_templates.py.
+#
+# Variables: name, description, link, tags, alert, reports, test_results,
+# started_at, duration_seconds, status, contact, contact_type, contact_channel.
+# batch_subject instead gets: monitor_count, monitor_names, alert_count,
+# report_count, contact, contact_type, contact_channel.
+#
+# Plain text email and file bodies are rendered as typed; html bodies and chat
+# messages escape their variables.  An undefined variable renders as
+# "(Undefined)".
+
+[default.contact]
+# -- repeat notification rate limiting ----------------------------------------
+# A monitor left in error or alert is rechecked on its recheck_after_<status>
+# cadence, and every one of those runs would otherwise notify again.  These
+# delays set the minimum gap between repeat notifications of each type, in the
+# same human readable form as the recheck intervals ("30s", "15 min", "2 hours"
+# - a bare number means minutes).
+# 0 or absent = no rate limiting, every run notifies.  Overridable per monitor
+# in [contact].
+#
+# The alert and error delays also reset whenever the monitor's status changes,
+# so a recovery, or a slide from alert to error, is reported straight away.
+# The report, info, and notify delays are plain fixed windows measured from the
+# last delivery - those notifications fire on healthy runs too, so a status
+# reset would leave them never rate limited at all.
+renotify_after_alert = 0
+renotify_after_report = 0
+renotify_after_error = 0
+renotify_after_info = 0
+renotify_after_notify = 0
+
+[default.contact.limits]
+# rendered output longer than this is truncated with an ellipsis
+subject = 200
+email = 100000
+slack = 3900
+teams = 20000
+text = 160
+
+[default.contact.message.alert.email]
+subject = "alert: {{ name }} - {{ alert.name or alert.message }}"
+batch_subject = "alerts: {{ alert_count }} monitor(s) - {{ monitor_names | join(', ') }}"
+body = """
+[{{ name }}] {{ alert.message }}
+{% if alert.value is not none %}
+  value: {{ alert.value }} (threshold {{ alert.threshold }})
+{% endif %}
+{% if alert.details %}
+  details: {{ alert.details }}
+{% endif %}
+{% if description %}
+
+Monitor: {{ description }}
+{% endif %}
+{% if link %}
+Support: {{ link }}
+{% endif %}
+"""
+html = """
+<h3>[{{ name }}]</h3>
+<p>{{ alert.message }}</p>
+<ul>
+{% if alert.value is not none %}
+  <li>value: {{ alert.value }} (threshold {{ alert.threshold }})</li>
+{% endif %}
+{% if alert.details %}
+  <li>details: {{ alert.details }}</li>
+{% endif %}
+</ul>
+
+{% if description %}
+<p>Monitor: {{ description }}</p>
+{% endif %}
+{% if link %}
+<p>Support: <a href="{{ link }}">more information...</a></p>
+{% endif %}
+"""
+
+[default.contact.message.alert.slack]
+subject = "alert: {{ name }} - {{ alert.name or alert.message }}"
+batch_subject = "alerts: {{ alert_count }} monitor(s) - {{ monitor_names | join(', ') }}"
+message = """
+*{{ name }}* - {{ alert.message }}
+{% if alert.value is not none %}
+value {{ alert.value }} (threshold {{ alert.threshold }})
+{% endif %}
+{% if link %}
+<{{ link }}|support>
+{% endif %}
+"""
+
+[default.contact.message.alert.teams]
+subject = "alert: {{ name }} - {{ alert.name or alert.message }}"
+batch_subject = "alerts: {{ alert_count }} monitor(s) - {{ monitor_names | join(', ') }}"
+message = """
+**{{ name }}** - {{ alert.message }}
+{% if alert.value is not none %}
+value {{ alert.value }} (threshold {{ alert.threshold }})
+{% endif %}
+{% if link %}
+{{ link }}
+{% endif %}
+"""
+
+[default.contact.message.report.email]
+subject = "report: {{ name }} - {{ reports | length }} report(s)"
+batch_subject = "reports: {{ report_count }} monitor(s) - {{ monitor_names | join(', ') }}"
+body = """
+{% for report in reports %}
+[{{ name }}] {{ report.title }} - {{ report.row_count }} row(s)
+
+{{ report | table }}
+
+{% endfor %}
+"""
+html = """
+{% for report in reports %}
+<h3>{{ name }} - {{ report.title }}</h3>
+{{ report | html_table }}
+{% endfor %}
+"""
+
+[default.contact.message.info.email]
+subject = "info: {{ name }} ({{ status }})"
+batch_subject = "info: {{ monitor_count }} monitor(s)"
+body = """
+Monitor: {{ name }} ({{ status }})
+Started: {{ started_at | datetime }} in {{ '%.2f' | format(duration_seconds) }}s
+
+{% for test in test_results %}
+{{ test.key }} ({{ test.test_type }}): {{ test.status.value }}{% if test.message %} - {{ test.message }}{% endif %}
+
+{% endfor %}
+"""
+
+[default.contact.message.notify.email]
+subject = "ran: {{ name }} ({{ status }})"
+batch_subject = "ran: {{ monitor_count }} monitor(s)"
+body = "Monitor '{{ name }}' ran at {{ started_at | datetime }} with status {{ status }}."
+
+[default.contact.message.error.email]
+subject = "error: {{ name }}"
+batch_subject = "errors: {{ monitor_count }} monitor(s)"
+body = """
+Monitor '{{ name }}' reported errors:
+
+{% for test in test_results %}
+{% if test.error %}
+{{ test.key }}: {{ test.error }}
+{% endif %}
+{% endfor %}
+{% if link %}
+
+Support: {{ link }}
+{% endif %}
+"""
+
+[default.contact.message.report.file]
+body = """
+{% if test_results %}
+[{{ name }}] tests:
+{% for test in test_results %}
+  {{ test.key }} ({{ test.test_type }}): {{ test.status.value }}\
+{% if test.message %} - {{ test.message }}{% endif %}
+{% if link %}     Support: {{ link }}{% endif %}
+     {{ started_at | datetime }} - {{ '%.2f' | format(test.duration_seconds) }}s
+
+{% endfor %}
+{% endif %}
+{% for report in reports %}
+
+[{{ name }}] {{ report.title }} - {{ report.row_count }} row(s)
+
+{{ report | table }}
+{% endfor %}
+"""
+html = """
+{% if test_results %}
+<h3>{{ name }} - tests</h3>
+<ul>
+{% for test in test_results %}
+<li>{{ test.key }} ({{ test.test_type }}): {{ test.status.value }}\
+{% if test.message %} - {{ test.message }}{% endif %}
+<br> &nbsp; {{ started_at | datetime }} - {{ '%.2f' | format(test.duration_seconds) }}s
+{% if link %} &nbsp; <a href="{{ link }}">Support</a>{% endif %}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% for report in reports %}
+<h3>{{ name }} - {{ report.title }}</h3>
+{{ report | html_table }}
+{% endfor %}
+"""
+
+
+[default.email]
+# leave host empty to log emails instead of sending them
+host = "smtp.example.com"
+port = 587
+from_address = "no-reply@example.com"
+use_tls = true
+subject_prefix = "[monitor]"
+username = "some-email-user"
+
+# -- send quota ---------------------------------------------------------------
+# Both limits are rolling windows over `email_send_log`, so they hold across
+# `run-scheduled` invocations.  A message a limit blocks is dropped, not
+# delayed - the monitor's next run produces a fresh notification anyway.
+# --simulate never consumes quota.
+
+# maximum recipient-sends in any rolling 24 hours, the guard for the relay's
+# daily quota.  This is a single deployment wide total across every recipient
+# and every monitor, not a per address figure.  0 or absent = unlimited
+max_per_day = 0
+
+# maximum sends to any one address within `cooldown_window_minutes`, the guard
+# against a continuously failing monitor flooding its contacts.
+# 0 or absent = unlimited
+max_per_recipient = 0
+cooldown_window_minutes = 60
+
+# how long send log rows are kept by `purge`.  Must exceed the longest window
+# above
+send_log_retention_days = 7
+
+[default.slack]
+# leave both empty to log slack messages instead of sending them.
+# a bot token is preferred - it can post to any #channel or @person.
+token = ""
+# fallback for deployments without a bot token: one incoming webhook used for
+# every target, optionally overridden per target below
+webhook_url = ""
+
+#[default.slack.webhooks]
+#"#monitoring" = "https://hooks.slack.com/services/T000/B000/xxxx"
+
+[default.teams]
+# leave empty to log teams messages instead of sending them.  Teams incoming
+# webhooks are per channel, so map each target to its own url below.
+webhook_url = ""
+
+#[default.teams.webhooks]
+#"#monitoring" = "https://outlook.office.com/webhook/xxxx"
+
+[default.text]
+# a `text:<phone_number>` contact is delivered through this provider.  This is
+# a single global choice for the whole deployment, not per monitor.  Leave
+# empty (or provider unset) to log text messages instead of sending them.
+# Bodies are truncated to 160 characters, with a warning logged when that
+# happens, regardless of provider.
+#
+#   imsg    - sends an iMessage through the `imsg` cli tool.  macOS only - on
+#             any other platform, or if `imsg` is not installed, sending fails
+#             per message (logged), the monitor still loads and runs.
+#   twilio  - sends an sms through the Twilio api.  Needs [default.text.twilio]
+#             below, with the auth token in secrets.toml under
+#             [default.passwords] as `twilio`.
+provider = ""
+
+#[default.text.twilio]
+#account_sid = "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+#from_number = "+15551234567"
+
+[default.ping]
+count = 2
+timeout_seconds = 5
+
+[default.http]
+timeout_seconds = 30
+verify_ssl = true
+
+# the docker host used by [test.docker_container_running] sections that name no
+# connection.  Left unset it is the local engine for the platform -
+# unix:///var/run/docker.sock, or npipe:////./pipe/docker_engine on windows.
+# Only unix://, npipe:// and ssh:// hosts are supported
+[default.docker]
+#host = "unix:///var/run/docker.sock"
+timeout_seconds = 30
+
+[default.logging]
+level = "DEBUG"
+
+[development.logging]
+level = "DEBUG"
+
+[production.logging]
+level = "INFO"
