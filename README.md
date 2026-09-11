@@ -179,7 +179,3 @@ uv run pytest tests/unit/ -k "test_name"
 # Run tests excluding slow tests
 uv run pytest tests/unit/ -m "unit and not slow"
 ```
-
-## Contributing
-
-## License
