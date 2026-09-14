@@ -356,12 +356,28 @@ url = "https://example.com/"
 key = "network.appgroup.app.docs"
 url = "https://example.com/docs"
 
+[test.html_200.internal]
+key = "network.appgroup.app.internal"
+url = "https://app.internal.example.com/"
+# skip certificate verification for this test only - accepts self signed,
+# expired and wrong-host certificates.  unset it follows [http] verify_ssl in
+# settings.toml; an explicit true forces verification on even when that is off
+verify_ssl = false
+# or keep verification on and trust a private ca instead
+#ca_bundle = "/etc/ssl/private-ca.pem"
+
 
 [test.html_json_exists]
 # monitor will load a web page as json and check to see if a json string exists
 key = "network.appgroup.app.html"  # a unique identifier for the monitor used to store results
 url = "https://example.com/app/health"
 jq = ".health.healthy"
+# skip certificate verification for this test only - accepts self signed,
+# expired and wrong-host certificates.  unset it follows [http] verify_ssl in
+# settings.toml; an explicit true forces verification on even when that is off
+verify_ssl = false
+# or keep verification on and trust a private ca instead
+#ca_bundle = "/etc/ssl/private-ca.pem"
 
 
 [test.html_json_value]
@@ -370,6 +386,12 @@ key = "network.appgroup.app.html"  # a unique identifier for the monitor used to
 url = "https://example.com/app/health"
 jq = ".health.healthy"
 value = "1"
+# skip certificate verification for this test only - accepts self signed,
+# expired and wrong-host certificates.  unset it follows [http] verify_ssl in
+# settings.toml; an explicit true forces verification on even when that is off
+verify_ssl = false
+# or keep verification on and trust a private ca instead
+#ca_bundle = "/etc/ssl/private-ca.pem"
 
 [test.html_json_report]
 # Query the provided URL
@@ -383,6 +405,12 @@ jq = [
     ".machineName",
     ".assemblyVersion",
 ]
+# skip certificate verification for this test only - accepts self signed,
+# expired and wrong-host certificates.  unset it follows [http] verify_ssl in
+# settings.toml; an explicit true forces verification on even when that is off
+verify_ssl = false
+# or keep verification on and trust a private ca instead
+#ca_bundle = "/etc/ssl/private-ca.pem"
 
 
 [test.custom.magic_py]

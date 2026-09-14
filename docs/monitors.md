@@ -305,7 +305,16 @@ selectors across monitors, so sharing one makes a report ambiguous.
 | `[test.custom.<module>]` | Calls `command` in `<module>.py` under `custom_tests_path` with the expanded `args` |
 
 `opensearch_flag` / `elasticsearch_report` also accept an `index` to override
-the connection's `default_index`. `html_*` tests accept `headers`.
+the connection's `default_index`. `html_*` tests accept `headers`, `verify_ssl`
+and `ca_bundle`:
+
+- `verify_ssl` - left unset the test follows the `[http] verify_ssl` setting.
+  `false` skips certificate verification for this test only (self signed,
+  expired and wrong-host certificates are all accepted, and the
+  `InsecureRequestWarning` is suppressed); an explicit `true` forces
+  verification on for this test even when the global setting is off.
+- `ca_bundle` - path to a PEM file to verify against instead of the system
+  store, for hosts signed by a private ca. Ignored when verification is off.
 
 `docker_container_running` names containers with `container_name` and/or
 `container_names`, and passes only when every one of them is running. A

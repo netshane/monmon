@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..helpers import to_bool
 from ..http_client import HttpClient
 from ..json_extractor import JsonExtractor
 from ..monitor_models import TestConfig
@@ -26,7 +27,23 @@ class WebTestBase(MonitorTest):
         url = str(self.required_option("url"))
         headers = self.option("headers")
 
-        self.response = self.http_client.get(url, headers=headers if headers else None)
+        # tri-state on purpose: unset defers to the [http] setting, an explicit
+        # true forces verification on for this test even when the global is off
+        raw_verify_ssl = self.option("verify_ssl")
+        verify_ssl = to_bool(raw_verify_ssl)
+        if raw_verify_ssl is not None and verify_ssl is None:
+            raise ValueError(
+                f"Test '{self.key}' ({self.config.test_type}) has an invalid "
+                f"'verify_ssl' value {raw_verify_ssl!r} - expected true or false"
+            )
+        ca_bundle = self.option("ca_bundle")
+
+        self.response = self.http_client.get(
+            url,
+            headers=headers if headers else None,
+            verify_ssl=verify_ssl,
+            ca_bundle=str(ca_bundle) if ca_bundle else None,
+        )
         return self.response
 
     def fetch_json(self, result: TestResult):

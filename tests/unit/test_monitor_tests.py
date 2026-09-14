@@ -189,8 +189,16 @@ class FakeHttpClient:
         self.body = body
         self.requested = []
 
-    def get(self, url: str, headers: dict | None = None) -> HttpResponse:
+    def get(
+        self,
+        url: str,
+        headers: dict | None = None,
+        verify_ssl: bool | None = None,
+        ca_bundle: str | None = None,
+    ) -> HttpResponse:
         self.requested.append(url)
+        self.verify_ssl = verify_ssl
+        self.ca_bundle = ca_bundle
         return HttpResponse(url=url, status_code=self.status_code, text=self.body)
 
 
@@ -954,6 +962,73 @@ def test_html_200_alerts_on_anything_else(expander, extractor):
 
     assert result.status == ResultStatus.ALERT
     assert result.alerts[0].value == 503
+
+
+@pytest.mark.unit
+def test_html_verify_ssl_defers_to_client_when_unset(expander, extractor):
+    client = FakeHttpClient()
+    config = TestConfig("html_200", "web.health", {"url": "https://example.com/"})
+
+    HtmlStatusTest(config, expander, client, extractor).run()
+
+    assert client.verify_ssl is None
+    assert client.ca_bundle is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("raw", [False, "false", "no", "0"])
+def test_html_verify_ssl_false_disables_verification(expander, extractor, raw):
+    client = FakeHttpClient()
+    config = TestConfig(
+        "html_200", "web.health", {"url": "https://example.com/", "verify_ssl": raw}
+    )
+
+    HtmlStatusTest(config, expander, client, extractor).run()
+
+    assert client.verify_ssl is False
+
+
+@pytest.mark.unit
+def test_html_verify_ssl_true_forces_verification(expander, extractor):
+    client = FakeHttpClient(body='{"health": {"healthy": 1}}')
+    config = TestConfig(
+        "html_json_exists",
+        "web.health",
+        {"url": "https://example.com/", "jq": ".health.healthy", "verify_ssl": True},
+    )
+
+    HtmlJsonExistsTest(config, expander, client, extractor).run()
+
+    assert client.verify_ssl is True
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("raw", ["fasle", "", "{{>unknown<}}"])
+def test_html_verify_ssl_invalid_value_is_an_error(expander, extractor, raw):
+    client = FakeHttpClient()
+    config = TestConfig(
+        "html_200", "web.health", {"url": "https://example.com/", "verify_ssl": raw}
+    )
+
+    result = HtmlStatusTest(config, expander, client, extractor).run()
+
+    assert result.status == ResultStatus.ERROR
+    assert "invalid 'verify_ssl' value" in result.message
+    assert client.requested == []
+
+
+@pytest.mark.unit
+def test_html_ca_bundle_is_passed_through(expander, extractor):
+    client = FakeHttpClient(body="{}")
+    config = TestConfig(
+        "html_json_report",
+        "web.report",
+        {"url": "https://example.com/", "jq": [".a"], "ca_bundle": "/etc/ca.pem"},
+    )
+
+    HtmlJsonReportTest(config, expander, client, extractor).run()
+
+    assert client.ca_bundle == "/etc/ca.pem"
 
 
 @pytest.mark.unit

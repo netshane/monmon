@@ -19,6 +19,26 @@ def to_number(value) -> float | int | None:
         return None
 
 
+def to_bool(value) -> bool | None:
+    """Coerce a value to a bool, returning None when unset or unrecognised.
+
+    Toml booleans arrive as bools, but templated options can arrive as the
+    strings "true" / "false" - `bool("false")` is True, so never use that.
+    """
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+
+    text = str(value).strip().lower()
+    if text in {"true", "yes", "on", "1"}:
+        return True
+    if text in {"false", "no", "off", "0"}:
+        return False
+
+    return None
+
+
 def format_table(
     columns: list[str], rows: list[list], max_rows: int | None = None
 ) -> str:
