@@ -237,6 +237,21 @@ WHERE a.Status = 'Failed'
   AND a.ScanDate > DATEADD(day, -1, GETDATE())
 """
 
+[test.dbexists]
+# Test consists of a query that is expected to return some rows
+# The monitor generates an alert if no rows come back;
+key = "network.appgroup.app.dbexists"  # a unique identifier for the monitor used to store results
+connection = "db_aws" # this should create a connection using the depencies method get_db
+query = """
+SELECT
+	a.Monitor AS [Name],
+    a.ScanDate AS [ScanDate],
+    a.Status AS [Status]
+FROM Monitors AS a
+WHERE a.Status = 'Success'
+  AND a.ScanDate > DATEADD(day, -1, GETDATE())
+"""
+
 [test.dbreport]
 # Monitor generates a report that consists of a table of the columns returned
 # 
@@ -365,6 +380,13 @@ url = "https://app.internal.example.com/"
 verify_ssl = false
 # or keep verification on and trust a private ca instead
 #ca_bundle = "/etc/ssl/private-ca.pem"
+
+[test.html_xxx]
+# monitor will attempt to load a web page and will alert if anything other than the expected status is found (it will follow redirects)
+key = "network.appgroup.app.html_xxx"  # a unique identifier for the monitor used to store results
+status_code = 401  # the expected HTTP status code for this monitor, will alert if this code is not received
+url = "https://example.com/app/health"
+
 
 
 [test.html_json_exists]
