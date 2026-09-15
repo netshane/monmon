@@ -384,7 +384,7 @@ verify_ssl = false
 [test.html_xxx]
 # monitor will attempt to load a web page and will alert if anything other than the expected status is found (it will follow redirects)
 key = "network.appgroup.app.html_xxx"  # a unique identifier for the monitor used to store results
-status_code = 401  # the expected HTTP status code for this monitor, will alert if this code is not received
+expected_status = 401  # the expected HTTP status code for this monitor, will alert if this code is not received
 url = "https://example.com/app/health"
 
 
