@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from loguru import logger
 
@@ -335,7 +336,7 @@ class Notifier:
         contact_type: str,
         alert: Alert | None = None,
     ) -> dict:
-        context = {
+        context: dict[str, Any] = {
             "name": definition.name,
             "description": definition.description,
             "link": definition.link,

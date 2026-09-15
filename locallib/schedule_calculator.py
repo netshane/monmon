@@ -230,7 +230,7 @@ class ScheduleCalculator:
     ) -> datetime | None:
         base = last_run or (now - timedelta(seconds=1))
         try:
-            iterator = croniter(schedule.cron, base)
+            iterator = croniter(schedule.cron or "", base)
         except (ValueError, KeyError) as e:
             logger.error(f"Invalid cron expression '{schedule.cron}': {e}")
             return None

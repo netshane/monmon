@@ -119,10 +119,7 @@ class QuotaLimitedEmailSender(EmailSender):
     def __init__(self, inner: EmailSender, gate: EmailQuotaGate):
         self.inner = inner
         self.gate = gate
-
-    @property
-    def is_live(self) -> bool:
-        return self.inner.is_live
+        self.is_live = inner.is_live
 
     def send(
         self, to: list[str], subject: str, body: str, html: str | None = None

@@ -1,5 +1,6 @@
 import os
 from math import ceil
+from typing import TypedDict
 
 from loguru import logger
 from nscomponents import SettingsBase, nslogging as mlog
@@ -111,8 +112,18 @@ class MonitorSettings(SettingsBase):
         mlog.init_logging(application=self.appname, **self.logging)
 
 
-__cached_settings = None
-settings_options = {
+__cached_settings: MonitorSettings | None = None
+
+
+class _SettingsOptions(TypedDict):
+    prd: bool
+    dev: bool
+    force_env: str | None
+    settings_file: str
+    settings_extension_file: str | None
+
+
+settings_options: _SettingsOptions = {
     "prd": False,
     "dev": False,
     "force_env": None,
@@ -208,8 +219,9 @@ def get_settings() -> MonitorSettings:
         if os.path.exists(extra_env_path):
             load_dotenv(extra_env_path)
 
+    environment: str | None
     if settings_options["dev"]:
-        environment = settings_options["force_env"]
+        environment = settings_options["force_env"] or "Development"
         __cached_settings = MonitorSettings.from_toml(
             toml_file=settings_options["settings_file"],
             environment_var=environment,
@@ -219,7 +231,7 @@ def get_settings() -> MonitorSettings:
         )
         logger.info("DEVELOPMENT environment set")
     elif settings_options["prd"]:
-        environment = settings_options["force_env"]
+        environment = settings_options["force_env"] or "Production"
         __cached_settings = MonitorSettings.from_toml(
             toml_file=settings_options["settings_file"],
             environment_var=environment,

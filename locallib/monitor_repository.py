@@ -127,7 +127,7 @@ class MonitorRepository:
         finished_at = result.finished_at or datetime.now()
 
         with self.engine.begin() as conn:
-            run_id = conn.execute(
+            inserted = conn.execute(
                 insert(monitor_runs).values(
                     monitor_name=result.monitor_name,
                     status=result.status.value,
@@ -139,7 +139,8 @@ class MonitorRepository:
                     report_count=len(result.reports),
                     error_count=len(result.errors),
                 )
-            ).inserted_primary_key[0]
+            ).inserted_primary_key
+            run_id = inserted[0] if inserted is not None else 0
 
             for test_result in result.test_results:
                 conn.execute(

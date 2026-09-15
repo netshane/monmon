@@ -25,7 +25,13 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "mypy>=2.3.1",
     "pysonar>=1.7.0.5143",
+    "types-croniter>=6.2.4.20260711",
+    "types-docker>=7.2.0.20260827",
+    "types-pyyaml>=6.0.12.20260906",
+    "types-requests>=2.33.0.20260906",
+    "types-toml>=0.10.8.20260518",
 ]
 test = [
     "pytest",
@@ -42,3 +48,18 @@ markers = [
 
 [tool.uv.sources]
 nscomponents = { git = "https://github.com/netshane/nscomponents" }
+
+[tool.mypy]
+python_version = "3.13"
+files = ["locallib", "monmon.py"]
+check_untyped_defs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+    "boto3.*",
+    "nscomponents.*",
+    "requests_aws4auth.*",
+    "twilio.*",
+]
+ignore_missing_imports = true

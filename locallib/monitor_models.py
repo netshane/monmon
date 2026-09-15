@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import time
+from typing import Any
 
 from loguru import logger
 
@@ -146,21 +147,25 @@ class ContactConfig:
                 f'e.g. alert = ["email:ops@example.com", "slack:#alerts"]'
             )
 
-        return cls(
-            **{
-                contact_type: parse_contact_list(
-                    data.get(contact_type), field=f"contact.{contact_type}"
-                )
-                for contact_type in CONTACT_TYPES
-            },
-            combine_reports=bool(data.get("combine_reports", True)),
-            combine_alerts=bool(data.get("combine_alerts", True)),
-            **{
+        kwargs: dict[str, Any] = {
+            contact_type: parse_contact_list(
+                data.get(contact_type), field=f"contact.{contact_type}"
+            )
+            for contact_type in CONTACT_TYPES
+        }
+        kwargs.update(
+            {
                 f"renotify_after_{contact_type}": _clean_str(
                     data.get(f"renotify_after_{contact_type}")
                 )
                 for contact_type in CONTACT_TYPES
-            },
+            }
+        )
+
+        return cls(
+            combine_reports=bool(data.get("combine_reports", True)),
+            combine_alerts=bool(data.get("combine_alerts", True)),
+            **kwargs,
         )
 
 

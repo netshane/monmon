@@ -100,6 +100,11 @@ class SsaJobSucceededTest(SsaJobTestBase):
             return
 
         status_index = self.column_index(columns, "RunStatusDescription")
+        if status_index is None:
+            raise ValueError(
+                f"Test '{self.key}' ({self.test_type}) query must return a "
+                f"'RunStatusDescription' column - got {columns}"
+            )
         status = str(rows[0][status_index])
         result.value = status
         message = f"Job '{job_name}' last run status is '{status}'"

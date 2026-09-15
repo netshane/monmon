@@ -10,6 +10,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from fnmatch import fnmatchcase
+from typing import Any
 
 from loguru import logger
 
@@ -322,7 +323,7 @@ class ReportDataBuilder:
         if until is not None:
             points = [p for p in points if p["at"] is None or p["at"] <= until]
 
-        resolved = {
+        resolved: dict[str, Any] = {
             "name": spec.name,
             "label": spec.label or spec.name.replace("_", " "),
             "mode": spec.mode,

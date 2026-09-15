@@ -6,7 +6,7 @@ class OpenSearchService:
     def __init__(self, aws_service: AwsService, host: str, default_index: str):
         self.aws_service = aws_service
         self.default_index = default_index
-        self.client = None
+        self.client: OpenSearch | None = None
         self.host = host
 
     def __get_client(self):

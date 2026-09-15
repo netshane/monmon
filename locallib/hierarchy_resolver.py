@@ -131,7 +131,7 @@ class HierarchyResolver:
             failed = [
                 name
                 for name in parent_monitors
-                if statuses.get(name) is not None and statuses[name].is_failure
+                if (status := statuses.get(name)) is not None and status.is_failure
             ]
 
             if failed:
