@@ -301,9 +301,14 @@ selectors across monitors, so sharing one makes a report ambiguous.
 | `[test.opensearch_flag]` | Runs the search on `connection`, takes the first value at `jq`, alerts when it is greater than 0 |
 | `[test.elasticsearch_report]` | Runs the search and reports one row per hit with a column per path in `jqs` |
 | `[test.html_200]` | Fetches `url` (following redirects) and alerts on any status other than 200 (or `status_code`) |
+| `[test.html_xxx]` | Fetches `url` and alerts on any status other than `expected_status`; a failed request (no response) alerts as well |
 | `[test.html_json_exists]` | Fetches `url` as json and alerts when `jq` resolves to nothing |
 | `[test.html_json_value]` | As above, but alerts when the value does not equal `value` |
 | `[test.custom.<module>]` | Calls `command` in `<module>.py` under `custom_tests_path` with the expanded `args` |
+
+`html_xxx` requires `expected_status` - unlike `html_200`, there is no
+implicit default since any status may be the one under test (e.g. an
+endpoint expected to require auth and return 401).
 
 `opensearch_flag` / `elasticsearch_report` also accept an `index` to override
 the connection's `default_index`. `html_*` tests accept `headers`, `verify_ssl`

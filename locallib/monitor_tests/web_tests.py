@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import requests
+
 from ..helpers import to_bool
 from ..http_client import HttpClient
 from ..json_extractor import JsonExtractor
@@ -77,6 +79,50 @@ class HtmlStatusTest(WebTestBase):
     def execute(self, result: TestResult):
         expected = int(self.option("status_code", 200) or 200)
         response = self.fetch()
+        result.value = response.status_code
+
+        if response.status_code != expected:
+            self.add_alert(
+                result,
+                Alert(
+                    name=response.url,
+                    message=f"{response.url} returned {response.status_code} "
+                    f"(expected {expected})",
+                    value=response.status_code,
+                    threshold=expected,
+                ),
+            )
+            return
+
+        result.message = f"{response.url} returned {response.status_code}"
+
+
+class HtmlXxxTest(WebTestBase):
+    """Alerts when a page returns anything other than an explicit expected status.
+
+    Unlike `html_200`, `expected_status` has no default - this test exists for
+    the less common status codes (e.g. an endpoint that is expected to
+    require auth and return 401). A failed request (no response received) is
+    also an alert rather than an error.
+    """
+
+    test_type = "html_xxx"
+
+    def execute(self, result: TestResult):
+        expected = int(self.required_option("expected_status"))
+
+        try:
+            response = self.fetch()
+        except requests.exceptions.RequestException as e:
+            self.add_alert(
+                result,
+                Alert(
+                    name=self.key,
+                    message=f"no response received from {self.option('url')}: {e}",
+                ),
+            )
+            return
+
         result.value = response.status_code
 
         if response.status_code != expected:

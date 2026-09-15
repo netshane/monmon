@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import pytest
+import requests
 from sqlalchemy import create_engine, text
 
 from locallib.custom_test_loader import CustomTestLoader
@@ -21,6 +22,7 @@ from locallib.monitor_tests import (
     HtmlJsonReportTest,
     HtmlJsonValueTest,
     HtmlStatusTest,
+    HtmlXxxTest,
     OpenSearchFlagTest,
     OpenSearchReportTest,
     PingTest,
@@ -185,9 +187,12 @@ class FakeOpenSearchFactory:
 
 
 class FakeHttpClient:
-    def __init__(self, status_code: int = 200, body: str = "{}"):
+    def __init__(
+        self, status_code: int = 200, body: str = "{}", raises: Exception | None = None
+    ):
         self.status_code = status_code
         self.body = body
+        self.raises = raises
         self.requested = []
 
     def get(
@@ -200,6 +205,8 @@ class FakeHttpClient:
         self.requested.append(url)
         self.verify_ssl = verify_ssl
         self.ca_bundle = ca_bundle
+        if self.raises is not None:
+            raise self.raises
         return HttpResponse(url=url, status_code=self.status_code, text=self.body)
 
 
@@ -1055,6 +1062,64 @@ def test_html_verify_ssl_invalid_value_is_an_error(expander, extractor, raw):
 
     assert result.status == ResultStatus.ERROR
     assert "invalid 'verify_ssl' value" in result.message
+    assert client.requested == []
+
+
+@pytest.mark.unit
+def test_html_xxx_passes_when_status_matches_expected(expander, extractor):
+    client = FakeHttpClient(status_code=401)
+    config = TestConfig(
+        "html_xxx",
+        "web.auth",
+        {"url": "https://example.com/", "expected_status": 401},
+    )
+
+    result = HtmlXxxTest(config, expander, client, extractor).run()
+
+    assert result.status == ResultStatus.OK
+    assert result.value == 401
+
+
+@pytest.mark.unit
+def test_html_xxx_alerts_on_status_mismatch(expander, extractor):
+    client = FakeHttpClient(status_code=200)
+    config = TestConfig(
+        "html_xxx",
+        "web.auth",
+        {"url": "https://example.com/", "expected_status": 401},
+    )
+
+    result = HtmlXxxTest(config, expander, client, extractor).run()
+
+    assert result.status == ResultStatus.ALERT
+    assert result.alerts[0].value == 200
+    assert result.alerts[0].threshold == 401
+
+
+@pytest.mark.unit
+def test_html_xxx_alerts_instead_of_erroring_on_no_response(expander, extractor):
+    client = FakeHttpClient(raises=requests.exceptions.ConnectionError("boom"))
+    config = TestConfig(
+        "html_xxx",
+        "web.auth",
+        {"url": "https://example.com/", "expected_status": 401},
+    )
+
+    result = HtmlXxxTest(config, expander, client, extractor).run()
+
+    assert result.status == ResultStatus.ALERT
+    assert "no response received" in result.message
+
+
+@pytest.mark.unit
+def test_html_xxx_requires_expected_status(expander, extractor):
+    client = FakeHttpClient()
+    config = TestConfig("html_xxx", "web.auth", {"url": "https://example.com/"})
+
+    result = HtmlXxxTest(config, expander, client, extractor).run()
+
+    assert result.status == ResultStatus.ERROR
+    assert "requires a 'expected_status' setting" in result.message
     assert client.requested == []
 
 

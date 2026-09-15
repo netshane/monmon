@@ -19,6 +19,7 @@ from .web_tests import (
     HtmlJsonReportTest,
     HtmlJsonValueTest,
     HtmlStatusTest,
+    HtmlXxxTest,
 )
 from .custom_test import CustomTest
 
@@ -37,6 +38,7 @@ __all__ = [
     "OpenSearchExistsTest",
     "OpenSearchReportTest",
     "HtmlStatusTest",
+    "HtmlXxxTest",
     "HtmlJsonExistsTest",
     "HtmlJsonValueTest",
     "HtmlJsonReportTest",
