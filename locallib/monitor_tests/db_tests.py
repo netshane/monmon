@@ -193,6 +193,28 @@ class DbNoRowsTest(DbTestBase):
         return " ".join(text_value.split())
 
 
+class DbExistsTest(DbTestBase):
+    """Alerts when a query returns no rows."""
+
+    test_type = "dbexists"
+
+    def execute(self, result: TestResult):
+        _columns, rows = self.run_query()
+        result.value = len(rows)
+
+        if not rows:
+            self.add_alert(
+                result,
+                Alert(
+                    name=self.key,
+                    message=f"No rows returned for '{self.key}'",
+                ),
+            )
+            return
+
+        result.message = f"Query returned {len(rows)} row(s)"
+
+
 class DbReportTest(DbTestBase):
     """Produces a table report of everything the query returns."""
 

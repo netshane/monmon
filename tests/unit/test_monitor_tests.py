@@ -11,6 +11,7 @@ from locallib.monitor_models import TestConfig
 from locallib.monitor_results import ResultStatus
 from locallib.monitor_tests import (
     CustomTest,
+    DbExistsTest,
     DbFlagTest,
     DbNoRowsTest,
     DbReportTest,
@@ -584,6 +585,46 @@ def test_dbnorows_passes_when_the_query_returns_nothing(expander):
     assert result.value == 0
     assert result.alerts == []
     assert result.message == "Query returned no rows"
+
+
+@pytest.mark.unit
+def test_dbexists_alerts_when_the_query_returns_no_rows(expander):
+    db = FakeDbFactory(["CREATE TABLE monitors (Name TEXT)"])
+    config = TestConfig(
+        "dbexists",
+        "db.exists",
+        {"connection": "db_aws", "query": "SELECT Name FROM monitors"},
+    )
+
+    result = DbExistsTest(config, expander, db).run()
+
+    assert result.status == ResultStatus.ALERT
+    assert result.value == 0
+    alert = result.alerts[0]
+    assert alert.name == "db.exists"
+    assert alert.message == "No rows returned for 'db.exists'"
+
+
+@pytest.mark.unit
+def test_dbexists_passes_when_the_query_returns_rows(expander):
+    db = FakeDbFactory(
+        [
+            "CREATE TABLE monitors (Name TEXT, Status TEXT)",
+            "INSERT INTO monitors VALUES ('a', 'Success'), ('b', 'Success')",
+        ]
+    )
+    config = TestConfig(
+        "dbexists",
+        "db.exists",
+        {"connection": "db_aws", "query": "SELECT Name, Status FROM monitors"},
+    )
+
+    result = DbExistsTest(config, expander, db).run()
+
+    assert result.status == ResultStatus.OK
+    assert result.value == 2
+    assert result.alerts == []
+    assert result.message == "Query returned 2 row(s)"
 
 
 @pytest.mark.unit

@@ -10,6 +10,7 @@ from .json_extractor import JsonExtractor
 from .monitor_models import TestConfig
 from .monitor_tests import (
     CustomTest,
+    DbExistsTest,
     DbFlagTest,
     DbNoRowsTest,
     DbReportTest,
@@ -86,6 +87,7 @@ class MonitorTestFactory:
             "dbthreshold": self._db(DbThresholdTest),
             "dbreport": self._db(DbReportTest),
             "dbnorows": self._db(DbNoRowsTest),
+            "dbexists": self._db(DbExistsTest),
             "docker_container_running": self._docker(DockerContainerRunningTest),
             "ssa_job_succeeded": self._db(SsaJobSucceededTest),
             "ssa_job_errors": self._db(SsaJobErrorsTest),

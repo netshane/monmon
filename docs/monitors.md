@@ -293,6 +293,7 @@ selectors across monitors, so sharing one makes a report ambiguous.
 | `[test.dbflag]` | Runs `query` on `connection`; alerts when the scalar is greater than 0 |
 | `[test.dbthreshold]` | Query returns `Name`, `Value`, optional `Details`; alerts per row whose value exceeds `threshold` |
 | `[test.dbnorows]` | Alerts when the query returns any rows; the rows are listed in the alert details (`max_rows`, default 50) |
+| `[test.dbexists]` | Alerts when the query returns no rows; `result.value` is the row count |
 | `[test.dbreport]` | Reports every column the query returns as a table |
 | `[test.docker_container_running]` | Alerts per `container_name` / `container_names` entry that is not a running container on `connection` |
 | `[test.ssa_job_succeeded]` | Alerts unless the named SQL Server Agent job's most recent run in `timeframe` succeeded or is in progress |

@@ -1,6 +1,12 @@
 from .monitor_test import MonitorTest
 from .ping_test import PingTest
-from .db_tests import DbFlagTest, DbNoRowsTest, DbReportTest, DbThresholdTest
+from .db_tests import (
+    DbExistsTest,
+    DbFlagTest,
+    DbNoRowsTest,
+    DbReportTest,
+    DbThresholdTest,
+)
 from .docker_tests import DockerContainerRunningTest
 from .ssa_tests import SsaJobErrorsTest, SsaJobSucceededTest
 from .opensearch_tests import (
@@ -22,6 +28,7 @@ __all__ = [
     "DbFlagTest",
     "DbThresholdTest",
     "DbNoRowsTest",
+    "DbExistsTest",
     "DbReportTest",
     "DockerContainerRunningTest",
     "SsaJobSucceededTest",
