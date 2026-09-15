@@ -17,8 +17,9 @@
 - `uv` is used for dependency management and virtual environments.  Do not use `pip` or `venv`      directly.
 - use `uv run python` to run python commands within the uv environment.
 - use pytest for all unit tests
-- use `uvx ruff format` to autoformat files
-- use `uvx ruff check --fix` to lint all files
+- use `uv run ruff format` to autoformat files
+- use `uv run ruff check --fix` to lint all files
+- run `uv run mypy` to perform static type checking on the codebase
 
 ## Configuration
 - `settings.toml` - Connection string and other settings are stored here
