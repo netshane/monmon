@@ -36,5 +36,5 @@ command = "check_disk_space"
 args = [
 	"/",
 	"90",
-	"{{>today<}}",
+	"{{ today | date }}",
 ]

@@ -290,7 +290,7 @@ notify_if_empty = false  # default value, set to true to notify even if no faile
 [test.opensearch_flag]
 # Monitor will run the elastic search query in the query setting and will extract the first value
 # specified by jq.  If this value exists and is greater than 0, it will generate an alert
-# values delimited by {{> <}} should be evaluated
+# {{ jinja }} expressions in string values are evaluated
 key = "network.appgroup.app.metric"  # a unique identifier for the monitor used to store results
 connection = "es_prd" # this should create a connection using the dependencies method get_opensearch_service
 jq = ".properties.count"
@@ -324,8 +324,8 @@ query = """
 				{
 					"range": {
 						"Timestamp": {
-							"gte": "{{>today_iso_format<}}",
-							"lte": "{{>yesterday_io_format<}}",
+							"lte": "{{ today_iso_format }}",
+							"gte": "{{ yesterday_iso_format }}",
 							"format": "strict_date_optional_time"
 						}
 					}
@@ -341,7 +341,7 @@ query = """
 [test.opensearch_report]
 # Monitor will run the elastic search query in the query setting and will extract values specified
 # by jqs.  These will be put into a table and displayed as a report
-# values delimited by {{> <}} should be evaluated
+# {{ jinja }} expressions in string values are evaluated
 key = "network.appgroup.app.metric"  # a unique identifier for the monitor used to store results
 connection = "es"
 notify_if_empty = false  # default value, set to true to notify even if no rows
@@ -436,9 +436,9 @@ verify_ssl = false
 
 
 [test.custom.magic_py]
-# run the command test in the module magic_py stored in the custom_tests folder 
+# run the command test in the module magic_py stored in the custom_tests folder
 # the command will return either a report object or an alert object
-# the values in args should be evaluated for value expansion using the delimiters {{><}}
+# the values in args are evaluated as {{ jinja }} expressions
 # alert = {}
 # report = [
 # ]
@@ -447,5 +447,5 @@ command = "test_run"
 args = [
 	"123",
 	"some-server.com",
-	"{{>today<}}",
+	"{{ today | date }}",
 ]

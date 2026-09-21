@@ -1,11 +1,12 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
+from jinja2.exceptions import TemplateSyntaxError, UndefinedError
 
 from locallib.value_expander import ValueExpander
 
 """
-Test: {{>token<}} value expansion
+Test: Jinja value expansion
 """
 
 NOW = datetime(2026, 8, 12, 10, 30, 15)
@@ -18,35 +19,40 @@ def expander():
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    "token,expected",
+    "template,expected",
     [
-        ("today", "2026-08-12"),
-        ("yesterday", "2026-08-11"),
-        ("tomorrow", "2026-08-13"),
-        ("today_iso_format", "2026-08-12T00:00:00"),
-        ("yesterday_iso_format", "2026-08-11T00:00:00"),
-        # the sample monitor file spells it this way
-        ("yesterday_io_format", "2026-08-11T00:00:00"),
-        ("now_iso_format", "2026-08-12T10:30:15"),
-        ("utcnow_iso_format", "2026-08-12T10:30:15"),
-        ("epoch", str(int(NOW.timestamp()))),
-        ("strftime:%Y/%m/%d", "2026/08/12"),
+        ("{{ today }}", "2026-08-12 00:00:00"),
+        ("{{ yesterday }}", "2026-08-11 00:00:00"),
+        ("{{ tomorrow }}", "2026-08-13 00:00:00"),
+        ("{{ today_iso_format }}", "2026-08-12T00:00:00"),
+        ("{{ yesterday_iso_format }}", "2026-08-11T00:00:00"),
+        ("{{ now_iso_format }}", "2026-08-12T10:30:15"),
+        ("{{ epoch }}", str(int(NOW.timestamp()))),
+        ("{{ epoch_ms }}", str(int(NOW.timestamp() * 1000))),
+        ("{{ now | strftime('%Y/%m/%d') }}", "2026/08/12"),
+        ("{{ today | date }}", "2026-08-12"),
+        ("{{ (today - timedelta(days=7)) | isoformat }}", "2026-08-05T00:00:00"),
+        ("{{ (now - timedelta(minutes=5)) | isoformat }}", "2026-08-12T10:25:15"),
+        ("{{ (today + timedelta(days=2)) | date }}", "2026-08-14"),
     ],
 )
-def test_known_tokens(expander, token, expected):
-    assert expander.evaluate(token) == expected
+def test_known_templates(expander, template, expected):
+    assert expander.expand_text(template) == expected
 
 
 @pytest.mark.unit
-def test_offsets_are_applied(expander):
-    assert expander.evaluate("today-7d") == "2026-08-05"
-    assert expander.evaluate("now-5min") == "2026-08-12T10:25:15"
-    assert expander.evaluate("today+2 days") == "2026-08-14"
+def test_utcnow_is_the_actual_utc_time(expander):
+    before = datetime.now(timezone.utc)
+    rendered = expander.expand_text("{{ utcnow_iso_format }}")
+    after = datetime.now(timezone.utc)
+
+    rendered_dt = datetime.fromisoformat(rendered)
+    assert before <= rendered_dt <= after
 
 
 @pytest.mark.unit
-def test_tokens_are_replaced_in_text(expander):
-    query = '{"gte": "{{>today_iso_format<}}", "lte": "{{> now_iso_format <}}"}'
+def test_templates_are_rendered_in_text(expander):
+    query = '{"gte": "{{ today_iso_format }}", "lte": "{{ now_iso_format }}"}'
 
     assert expander.expand_text(query) == (
         '{"gte": "2026-08-12T00:00:00", "lte": "2026-08-12T10:30:15"}'
@@ -54,14 +60,30 @@ def test_tokens_are_replaced_in_text(expander):
 
 
 @pytest.mark.unit
-def test_unknown_tokens_are_left_alone(expander):
-    assert expander.expand_text("value {{>nope<}}") == "value {{>nope<}}"
+def test_plain_strings_pass_through(expander):
+    assert expander.expand_text("value") == "value"
+
+
+@pytest.mark.unit
+def test_undefined_variable_raises(expander):
+    with pytest.raises(UndefinedError):
+        expander.expand_text("value {{ nope }}")
+
+
+@pytest.mark.unit
+def test_old_delimiter_syntax_raises(expander):
+    with pytest.raises(TemplateSyntaxError):
+        expander.expand_text("{{>today<}}")
 
 
 @pytest.mark.unit
 def test_lists_and_dicts_are_expanded(expander):
     expanded = expander.expand(
-        {"args": ["123", "{{>today<}}"], "count": 5, "nested": {"when": "{{>today<}}"}}
+        {
+            "args": ["123", "{{ today | date }}"],
+            "count": 5,
+            "nested": {"when": "{{ today | date }}"},
+        }
     )
 
     assert expanded == {

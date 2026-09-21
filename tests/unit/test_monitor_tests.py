@@ -450,7 +450,7 @@ def test_dbflag_expands_tokens_in_the_query(expander):
         "db.flag",
         {
             "connection": "db_aws",
-            "query": "SELECT 0 WHERE '{{>today<}}' = '2026-08-12'",
+            "query": "SELECT 0 WHERE '{{ today | date }}' = '2026-08-12'",
         },
     )
 
@@ -912,7 +912,7 @@ def test_opensearch_flag_expands_the_query(expander, extractor):
         {
             "connection": "es_prd",
             "jq": ".properties.count",
-            "query": '{"gte": "{{>today_iso_format<}}"}',
+            "query": '{"gte": "{{ today_iso_format }}"}',
         },
     )
 
@@ -1051,7 +1051,7 @@ def test_html_verify_ssl_true_forces_verification(expander, extractor):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("raw", ["fasle", "", "{{>unknown<}}"])
+@pytest.mark.parametrize("raw", ["fasle", ""])
 def test_html_verify_ssl_invalid_value_is_an_error(expander, extractor, raw):
     client = FakeHttpClient()
     config = TestConfig(
@@ -1062,6 +1062,21 @@ def test_html_verify_ssl_invalid_value_is_an_error(expander, extractor, raw):
 
     assert result.status == ResultStatus.ERROR
     assert "invalid 'verify_ssl' value" in result.message
+    assert client.requested == []
+
+
+@pytest.mark.unit
+def test_html_verify_ssl_typo_template_is_an_error(expander, extractor):
+    client = FakeHttpClient()
+    config = TestConfig(
+        "html_200",
+        "web.health",
+        {"url": "https://example.com/", "verify_ssl": "{{ unknown }}"},
+    )
+
+    result = HtmlStatusTest(config, expander, client, extractor).run()
+
+    assert result.status == ResultStatus.ERROR
     assert client.requested == []
 
 
@@ -1288,7 +1303,7 @@ def test_custom_dict_becomes_an_alert(expander, custom_loader):
     config = TestConfig(
         "custom.magic_py",
         "custom.key",
-        {"command": "alerting", "args": ["{{>today<}}"]},
+        {"command": "alerting", "args": ["{{ today | date }}"]},
     )
 
     result = CustomTest(config, expander, custom_loader, "magic_py").run()

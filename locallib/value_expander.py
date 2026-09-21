@@ -1,61 +1,55 @@
-"""Expands `{{>token<}}` placeholders found in monitor queries and arguments."""
+"""Expands Jinja `{{ ... }}` templates found in monitor test options."""
 
 from __future__ import annotations
 
-import re
-from datetime import datetime, timedelta
-from typing import Callable
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Callable
 
-from loguru import logger
+from jinja2 import Environment, StrictUndefined
 
 
 class ValueExpander:
-    """Replaces `{{>token<}}` placeholders with evaluated values.
+    """Renders Jinja templates embedded in monitor test option values.
 
-    Supported tokens (all case insensitive):
+    Context variables (built fresh from `now_provider()` on every call):
 
-    * `now`, `now_iso_format`, `utcnow`, `utcnow_iso_format`
-    * `today`, `today_iso_format`, `yesterday`, `yesterday_iso_format`,
-      `tomorrow`, `tomorrow_iso_format`
-    * `epoch`, `epoch_ms`
-    * `now-5min`, `now+2 hours`, `today-7d` - an offset applied to a base token
-    * `strftime:%Y/%m/%d` - the current time formatted with the given pattern
+    * `now`, `utcnow`, `today`, `yesterday`, `tomorrow` - datetimes. `today`,
+      `yesterday` and `tomorrow` are at midnight; `utcnow` is the real current
+      UTC time, independent of `now_provider`'s timezone.
+    * `epoch`, `epoch_ms` - the current unix time, as ints.
+    * `now_iso_format`, `utcnow_iso_format`, `today_iso_format`,
+      `yesterday_iso_format`, `tomorrow_iso_format` - the isoformat string of
+      the corresponding datetime above.
 
-    A `yesterday_io_format` spelling is accepted as an alias of
-    `yesterday_iso_format` because it appears in the sample monitor file.
+    Globals: `timedelta`, `date`, `datetime`.
+
+    Filters: `isoformat`, `strftime`, `date`, `epoch`, `epoch_ms`.
+
+    Undefined variables raise `jinja2.exceptions.UndefinedError` (via
+    `StrictUndefined`), so a typo fails the test rather than passing through
+    silently.
     """
-
-    PATTERN = re.compile(r"\{\{>\s*(.*?)\s*<\}\}")
-
-    _UNITS = {
-        "s": "seconds",
-        "sec": "seconds",
-        "secs": "seconds",
-        "second": "seconds",
-        "seconds": "seconds",
-        "m": "minutes",
-        "min": "minutes",
-        "mins": "minutes",
-        "minute": "minutes",
-        "minutes": "minutes",
-        "h": "hours",
-        "hr": "hours",
-        "hrs": "hours",
-        "hour": "hours",
-        "hours": "hours",
-        "d": "days",
-        "day": "days",
-        "days": "days",
-        "w": "weeks",
-        "week": "weeks",
-        "weeks": "weeks",
-    }
 
     def __init__(self, now_provider: Callable[[], datetime] | None = None):
         self.now_provider = now_provider or datetime.now
 
+        self._env = Environment(
+            undefined=StrictUndefined,
+            autoescape=False,
+            keep_trailing_newline=True,
+        )
+        self._env.globals.update(timedelta=timedelta, date=date, datetime=datetime)
+        self._env.filters.update(
+            isoformat=self._filter_isoformat,
+            strftime=self._filter_strftime,
+            date=self._filter_date,
+            epoch=self._filter_epoch,
+            epoch_ms=self._filter_epoch_ms,
+        )
+        self._template_cache: dict[str, Any] = {}
+
     def expand(self, value):
-        """Expand placeholders in strings, lists, and dicts, recursively."""
+        """Expand templates in strings, lists, tuples and dicts, recursively."""
         if isinstance(value, str):
             return self.expand_text(value)
         if isinstance(value, list):
@@ -68,74 +62,55 @@ class ValueExpander:
         return value
 
     def expand_text(self, text: str) -> str:
-        def replace(match: re.Match) -> str:
-            token = match.group(1)
-            try:
-                return self.evaluate(token)
-            except ValueError as e:
-                logger.warning(f"Unable to expand token '{token}': {e}")
-                return match.group(0)
+        """Render a single string as a Jinja template."""
+        if not any(marker in text for marker in ("{{", "{%", "{#")):
+            return text
 
-        return self.PATTERN.sub(replace, text)
+        template = self._template_cache.get(text)
+        if template is None:
+            template = self._env.from_string(text)
+            self._template_cache[text] = template
 
-    def evaluate(self, token: str) -> str:
-        """Evaluate a single token and return its string representation."""
-        token = token.strip()
-        if not token:
-            raise ValueError("empty token")
+        return template.render(self._context())
 
-        lowered = token.lower()
-
-        if lowered.startswith("strftime:"):
-            return self.now_provider().strftime(token.split(":", 1)[1])
-
-        base_token, delta = self._split_offset(lowered)
-        value = self._base_value(base_token)
-
-        if delta is not None:
-            value = value + delta
-
-        return self._format(base_token, value)
-
-    def _split_offset(self, token: str) -> tuple[str, timedelta | None]:
-        match = re.match(r"^([a-z_]+)\s*([+-])\s*(\d+)\s*([a-z]+)$", token)
-        if not match:
-            return token, None
-
-        base_token, sign, amount, unit = match.groups()
-        unit_name = self._UNITS.get(unit)
-        if unit_name is None:
-            raise ValueError(f"unknown time unit '{unit}'")
-
-        delta = timedelta(**{unit_name: int(amount)})
-        return base_token, -delta if sign == "-" else delta
-
-    def _base_value(self, token: str) -> datetime:
+    def _context(self) -> dict[str, Any]:
         now = self.now_provider()
-        midnight = datetime.combine(now.date(), datetime.min.time())
+        utcnow = datetime.now(timezone.utc)
+        today = datetime.combine(now.date(), datetime.min.time())
+        yesterday = today - timedelta(days=1)
+        tomorrow = today + timedelta(days=1)
 
-        if token in ("now", "now_iso_format", "epoch", "epoch_ms"):
-            return now
-        if token in ("utcnow", "utcnow_iso_format"):
-            return now
-        if token in ("today", "today_iso_format"):
-            return midnight
-        if token in ("yesterday", "yesterday_iso_format", "yesterday_io_format"):
-            return midnight - timedelta(days=1)
-        if token in ("tomorrow", "tomorrow_iso_format"):
-            return midnight + timedelta(days=1)
-
-        raise ValueError(f"unknown token '{token}'")
+        return {
+            "now": now,
+            "utcnow": utcnow,
+            "today": today,
+            "yesterday": yesterday,
+            "tomorrow": tomorrow,
+            "epoch": int(now.timestamp()),
+            "epoch_ms": int(now.timestamp() * 1000),
+            "now_iso_format": now.isoformat(),
+            "utcnow_iso_format": utcnow.isoformat(),
+            "today_iso_format": today.isoformat(),
+            "yesterday_iso_format": yesterday.isoformat(),
+            "tomorrow_iso_format": tomorrow.isoformat(),
+        }
 
     @staticmethod
-    def _format(token: str, value: datetime) -> str:
-        if token == "epoch":
-            return str(int(value.timestamp()))
-        if token == "epoch_ms":
-            return str(int(value.timestamp() * 1000))
-        if token.endswith("_iso_format") or token.endswith("_io_format"):
-            return value.isoformat()
-        if token in ("today", "yesterday", "tomorrow"):
-            return value.date().isoformat()
-
+    def _filter_isoformat(value: datetime | date) -> str:
         return value.isoformat()
+
+    @staticmethod
+    def _filter_strftime(value: datetime | date, fmt: str) -> str:
+        return value.strftime(fmt)
+
+    @staticmethod
+    def _filter_date(value: datetime) -> date:
+        return value.date()
+
+    @staticmethod
+    def _filter_epoch(value: datetime) -> int:
+        return int(value.timestamp())
+
+    @staticmethod
+    def _filter_epoch_ms(value: datetime) -> int:
+        return int(value.timestamp() * 1000)

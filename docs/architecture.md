@@ -203,7 +203,7 @@ and static assets live in `reports/<name>/`, output goes to `output/<name>/`.
 
 | Module | Responsibility |
 | --- | --- |
-| `value_expander.py` | expands `{{>now-5min<}}`-style tokens in test options |
+| `value_expander.py` | renders `{{ jinja }}` expressions in test option strings (`now`, `today`, `epoch`, ... context vars) |
 | `json_extractor.py` | json path style extraction for web / opensearch tests |
 | `db_connection_factory.py` | named db connections, snapshot/restore for per-monitor overrides; `results_db` is injected as a predefined connection in `dependencies.get_db_factory` |
 | `connection_inspector.py` | read-only, secret-redacted view of `[connections]` behind the `connections` cli command |

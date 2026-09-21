@@ -241,7 +241,7 @@ a monitor still using them fails to load with a message naming the replacement.
 ## [test.*]
 
 Each section is one test. `key` is the unique identifier stored with the
-result. Any string value may contain `{{>token<}}` placeholders (see below).
+result. Any string value may contain `{{ jinja }}` expressions (see below).
 
 ### Instances
 
@@ -381,20 +381,47 @@ first, then case insensitively. `opensearch_flag` looks in each hit's
 
 ### Value expansion
 
-Anywhere in a test's string values, `{{>token<}}` is replaced:
+Any string value in a test is rendered as a
+[Jinja](https://jinja.palletsprojects.com/) template before use, so
+`{{ ... }}` expressions and `{% ... %}` control structures both work. A
+string with no `{{`, `{%` or `{#` in it is returned unchanged.
 
-| Token | Example result |
+Context variables, all built from the current time on every run:
+
+| Variable | Example |
 | --- | --- |
-| `now`, `now_iso_format` | `2026-08-12T10:30:15` |
-| `today`, `yesterday`, `tomorrow` | `2026-08-12` |
-| `today_iso_format`, `yesterday_iso_format` | `2026-08-12T00:00:00` |
-| `utcnow`, `utcnow_iso_format` | UTC equivalents |
-| `epoch`, `epoch_ms` | `1786786215` |
-| `strftime:%Y/%m/%d` | `2026/08/12` |
-| `today-7d`, `now-5min`, `today+2 days` | the base token with an offset |
+| `now` | `2026-08-12 10:30:15` |
+| `utcnow` | the actual current UTC time, regardless of the host's local timezone |
+| `today`, `yesterday`, `tomorrow` | datetimes at midnight, e.g. `2026-08-12 00:00:00` |
+| `epoch`, `epoch_ms` | the current unix time, as an int |
+| `now_iso_format`, `utcnow_iso_format` | `2026-08-12T10:30:15` |
+| `today_iso_format`, `yesterday_iso_format`, `tomorrow_iso_format` | `2026-08-12T00:00:00` |
 
-`yesterday_io_format` is accepted as a spelling of `yesterday_iso_format`.
-Unknown tokens are left in place and logged.
+A bare `{{ today }}` renders `str(datetime)` (`2026-08-12 00:00:00`); use
+`today_iso_format`, or a filter, when a specific format is needed.
+
+Globals: `timedelta`, `date`, `datetime` - for arithmetic on the variables
+above, e.g. `{{ (today - timedelta(days=7)) | isoformat }}`.
+
+Filters:
+
+| Filter | Effect |
+| --- | --- |
+| `isoformat` | `value.isoformat()` |
+| `strftime(fmt)` | `value.strftime(fmt)` |
+| `date` | `value.date()` (drops the time component) |
+| `epoch` | `int(value.timestamp())` |
+| `epoch_ms` | `int(value.timestamp() * 1000)` |
+
+Jinja's `|` binds tighter than `-`, so `{{ today - timedelta(days=1) |
+isoformat }}` parses as `today - (timedelta(days=1) | isoformat)` and raises -
+wrap the arithmetic in parentheses: `{{ (today - timedelta(days=1)) |
+isoformat }}`.
+
+Templates use `StrictUndefined`: referencing an undefined variable (a typo,
+or the old `{{>token<}}` delimiter syntax) raises instead of rendering
+`(Undefined)` or passing the text through, which `MonitorTest.run()` turns
+into a `ResultStatus.ERROR` result for that test.
 
 ## Result statuses
 
