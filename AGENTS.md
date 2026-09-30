@@ -41,3 +41,10 @@ Configured in `pyproject.toml`:
 
 ## claude behavior
 - when implementing a new feature from a file specification, add a summary of the final implmentation to the end of the file.  Include the claude session id in the summary.
+
+ ## Memory
+ - create notes and lessons learned in the `docs/memory/` directory.  Use MEMORY.md as the main file.
+ - notes in this file should be very short and concise, capturing only the essential information and key takeaways.
+ - Larger notes or explanations should be stored in separate files within the `docs/memory/` directory, and referenced from MEMORY.md as needed.
+
+ - If a spec file is provided, write a summary of the implementation in the spec upon completion of implementation.
