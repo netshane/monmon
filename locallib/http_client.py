@@ -33,12 +33,27 @@ class HttpClient:
         verify_ssl: bool | None = None,
         ca_bundle: str | None = None,
     ) -> HttpResponse:
-        """Fetch `url`.
+        """Fetch `url` with GET, following redirects."""
+        return self.request(
+            "GET", url, headers=headers, verify_ssl=verify_ssl, ca_bundle=ca_bundle
+        )
 
-        `verify_ssl` overrides the client default for this request only -
-        `None` means "use the client default".  `ca_bundle` is a path to a
-        PEM file to verify against instead of the system store, and is
-        ignored when verification is off.
+    def request(
+        self,
+        method: str,
+        url: str,
+        headers: dict | None = None,
+        body: str | bytes | None = None,
+        verify_ssl: bool | None = None,
+        ca_bundle: str | None = None,
+        allow_redirects: bool = True,
+    ) -> HttpResponse:
+        """Send a `method` request to `url`.
+
+        `method` is passed through untouched.  `verify_ssl` overrides the
+        client default for this request only - `None` means "use the client
+        default".  `ca_bundle` is a path to a PEM file to verify against
+        instead of the system store, and is ignored when verification is off.
         """
         verify = self._verify(verify_ssl, ca_bundle)
 
@@ -47,12 +62,14 @@ class HttpClient:
                 warnings.simplefilter(
                     "ignore", urllib3.exceptions.InsecureRequestWarning
                 )
-            response = requests.get(
+            response = requests.request(
+                method,
                 url,
                 timeout=self.timeout_seconds,
-                allow_redirects=True,
+                allow_redirects=allow_redirects,
                 verify=verify,
                 headers=headers,
+                data=body,
             )
 
         return HttpResponse(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import requests
 
 from ..helpers import to_bool
@@ -27,26 +29,106 @@ class WebTestBase(MonitorTest):
 
     def fetch(self):
         url = str(self.required_option("url"))
-        headers = self.option("headers")
-
-        # tri-state on purpose: unset defers to the [http] setting, an explicit
-        # true forces verification on for this test even when the global is off
-        raw_verify_ssl = self.option("verify_ssl")
-        verify_ssl = to_bool(raw_verify_ssl)
-        if raw_verify_ssl is not None and verify_ssl is None:
-            raise ValueError(
-                f"Test '{self.key}' ({self.config.test_type}) has an invalid "
-                f"'verify_ssl' value {raw_verify_ssl!r} - expected true or false"
-            )
+        method = self._method()
+        body, headers = self._body_and_headers()
+        verify_ssl = self._verify_ssl()
         ca_bundle = self.option("ca_bundle")
 
-        self.response = self.http_client.get(
+        self.response = self.http_client.request(
+            method,
             url,
-            headers=headers if headers else None,
+            headers=headers,
+            body=body,
             verify_ssl=verify_ssl,
             ca_bundle=str(ca_bundle) if ca_bundle else None,
+            allow_redirects=self._allow_redirects(),
         )
         return self.response
+
+    def _invalid(self, option: str, value, expected: str) -> ValueError:
+        return ValueError(
+            f"Test '{self.key}' ({self.config.test_type}) has an invalid "
+            f"'{option}' value {value!r} - expected {expected}"
+        )
+
+    def _method(self) -> str:
+        # passed through as written: methods are case sensitive and unusual
+        # ones are a valid test case
+        method = self.option("method", "GET")
+        if not isinstance(method, str) or not method.strip():
+            raise self._invalid("method", method, "an http method")
+
+        return method.strip()
+
+    def _verify_ssl(self) -> bool | None:
+        # tri-state on purpose: unset defers to the [http] setting, an explicit
+        # true forces verification on for this test even when the global is off
+        raw = self.option("verify_ssl")
+        verify_ssl = to_bool(raw)
+        if raw is not None and verify_ssl is None:
+            raise self._invalid("verify_ssl", raw, "true or false")
+
+        return verify_ssl
+
+    def _allow_redirects(self) -> bool:
+        raw = self.option("allow_redirects")
+        if raw is None:
+            return True
+
+        allow = to_bool(raw)
+        if allow is None:
+            raise self._invalid("allow_redirects", raw, "true or false")
+
+        return allow
+
+    def _body_and_headers(self) -> tuple[str | bytes | None, dict | None]:
+        """Build the request body and headers, applying the precedence rules.
+
+        The user's `headers` table is copied, never mutated.  `content_type`
+        replaces any `Content-Type` header; a table / array body is sent as
+        json (with `application/json` unless a content type was given); any
+        `Content-Length` header is dropped when a body is sent.
+        """
+        raw_headers = self.option("headers")
+        if raw_headers and not isinstance(raw_headers, dict):
+            raise self._invalid("headers", raw_headers, "a table of header names")
+        headers = dict(raw_headers) if raw_headers else {}
+
+        raw_body = self.option("body")
+        body: str | bytes | None
+        if raw_body is None:
+            body = None
+        elif isinstance(raw_body, (dict, list)):
+            try:
+                body = json.dumps(raw_body)
+            except (TypeError, ValueError) as e:
+                raise self._invalid(
+                    "body", "<table>", f"json serialisable values ({e})"
+                ) from e
+            if not self._has_header(headers, "content-type"):
+                headers["Content-Type"] = "application/json"
+        else:
+            # http.client would encode a str as latin-1 and fail on e.g. "€"
+            body = str(raw_body).encode("utf-8")
+
+        content_type = self.option("content_type")
+        if content_type:
+            self._drop_header(headers, "content-type")
+            headers["Content-Type"] = str(content_type)
+
+        if body is not None:
+            self._drop_header(headers, "content-length")
+
+        return body, headers or None
+
+    @staticmethod
+    def _has_header(headers: dict, name: str) -> bool:
+        return any(str(key).lower() == name for key in headers)
+
+    @staticmethod
+    def _drop_header(headers: dict, name: str) -> None:
+        for key in [k for k in headers if str(k).lower() == name]:
+            del headers[key]
 
     def fetch_json(self, result: TestResult):
         """Fetch the response and parse it as JSON.

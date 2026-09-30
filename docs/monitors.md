@@ -311,8 +311,29 @@ implicit default since any status may be the one under test (e.g. an
 endpoint expected to require auth and return 401).
 
 `opensearch_flag` / `elasticsearch_report` also accept an `index` to override
-the connection's `default_index`. `html_*` tests accept `headers`, `verify_ssl`
-and `ca_bundle`:
+the connection's `default_index`. `html_*` tests accept `headers`, `method`,
+`content_type`, `body`, `allow_redirects`, `verify_ssl` and `ca_bundle`:
+
+- `method` - the http method, default `GET`. Passed through exactly as written
+  (surrounding whitespace is stripped, case is not changed) and not restricted
+  to a known list, so unusual methods can be tested. Empty is an error; a
+  method the http library refuses is a normal request failure.
+- `content_type` - optional `Content-Type` header. It wins over any
+  `Content-Type` key in `headers` (matched case insensitively).
+- `body` - optional request body, none by default. The whole value goes
+  through jinja expansion (`{{ epoch }}`, `{{ now_iso_format }}` ...).
+  - A string is sent as is, encoded as UTF-8; no content type is implied. In a json string a
+    literal `{{` must be escaped, e.g. `{{ '{{' }}`.
+  - A toml table (or array) is expanded value by value, serialised as json and
+    sent with `Content-Type: application/json` unless `content_type` or a
+    `Content-Type` header is set. Like `headers`, a table body only works
+    inside an instance section (`[test.html_200.<instance>.body]`).
+  - When a body is sent any `Content-Length` header is dropped so the real
+    length is used; without a body a `Content-Length` header is left alone.
+  - The body is never written to alerts, logs, or stored results.
+- `allow_redirects` - default `true`. `false` returns the 3xx response itself,
+  e.g. to test with `html_xxx` that a page redirects. Note that when following
+  a 301/302/303 `requests` turns a POST into a GET and drops the body.
 
 - `verify_ssl` - left unset the test follows the `[http] verify_ssl` setting.
   `false` skips certificate verification for this test only (self signed,

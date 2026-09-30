@@ -387,7 +387,36 @@ key = "network.appgroup.app.html_xxx"  # a unique identifier for the monitor use
 expected_status = 401  # the expected HTTP status code for this monitor, will alert if this code is not received
 url = "https://example.com/app/health"
 
+# check that a page redirects rather than following the redirect
+[test.html_xxx.redirect]
+key = "network.appgroup.app.redirect"
+url = "http://example.com/"
+expected_status = 301
+allow_redirects = false
 
+# method, body, content_type and headers are available on every html_* test.
+# a toml table body is sent as json (Content-Type application/json unless
+# content_type or a Content-Type header is set); a string body is sent as is.
+# the body is jinja expanded.  method defaults to GET, allow_redirects to true
+[test.html_json_value.create_order]
+key = "network.appgroup.app.create_order"
+url = "https://example.com/api/orders"
+method = "POST"
+jq = ".status"
+value = "created"
+headers = { Authorization = "Bearer abc123" }
+[test.html_json_value.create_order.body]
+name = "monitor-check"
+created = "{{ now_iso_format }}"
+
+# a string body is jinja expanded and sent as is - no content type is implied,
+# so set content_type (or a Content-Type header) when the server needs one
+[test.html_200.login_form]
+key = "network.appgroup.app.login_form"
+url = "https://example.com/login"
+method = "POST"
+content_type = "application/x-www-form-urlencoded"
+body = "user=monitor&ts={{ epoch }}"
 
 [test.html_json_exists]
 # monitor will load a web page as json and check to see if a json string exists

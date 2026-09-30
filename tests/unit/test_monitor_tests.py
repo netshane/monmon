@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 import pytest
@@ -202,7 +203,25 @@ class FakeHttpClient:
         verify_ssl: bool | None = None,
         ca_bundle: str | None = None,
     ) -> HttpResponse:
+        return self.request(
+            "GET", url, headers=headers, verify_ssl=verify_ssl, ca_bundle=ca_bundle
+        )
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        headers: dict | None = None,
+        body: str | bytes | None = None,
+        verify_ssl: bool | None = None,
+        ca_bundle: str | None = None,
+        allow_redirects: bool = True,
+    ) -> HttpResponse:
         self.requested.append(url)
+        self.method = method
+        self.headers = headers
+        self.sent_body = body
+        self.allow_redirects = allow_redirects
         self.verify_ssl = verify_ssl
         self.ca_bundle = ca_bundle
         if self.raises is not None:
@@ -1348,3 +1367,238 @@ def test_custom_missing_command_is_an_error(expander, custom_loader):
     result = CustomTest(config, expander, custom_loader, "magic_py").run()
 
     assert result.status == ResultStatus.ERROR
+
+
+# -- html request options ----------------------------------------------
+
+
+def _html(expander, extractor, client, options, cls=HtmlStatusTest, kind="html_200"):
+    options = {"url": "https://example.com/", **options}
+    return cls(TestConfig(kind, "web.req", options), expander, client, extractor).run()
+
+
+@pytest.mark.unit
+def test_html_request_defaults_are_unchanged(expander, extractor):
+    client = FakeHttpClient()
+
+    _html(expander, extractor, client, {})
+
+    assert client.method == "GET"
+    assert client.sent_body is None
+    assert client.headers is None
+    assert client.allow_redirects is True
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("method", ["POST", "post", "PURGE", " DELETE "])
+def test_html_method_is_passed_through(expander, extractor, method):
+    client = FakeHttpClient()
+
+    _html(expander, extractor, client, {"method": method})
+
+    assert client.method == method.strip()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("method", ["", "   "])
+def test_html_empty_method_is_an_error(expander, extractor, method):
+    client = FakeHttpClient()
+
+    result = _html(expander, extractor, client, {"method": method})
+
+    assert result.status == ResultStatus.ERROR
+    assert "invalid 'method' value" in result.message
+    assert client.requested == []
+
+
+@pytest.mark.unit
+def test_html_string_body_is_sent_as_is_and_expanded(expander, extractor):
+    client = FakeHttpClient()
+
+    _html(expander, extractor, client, {"body": "n={{ 1 + 2 }}"})
+
+    assert client.sent_body == b"n=3"
+    assert client.headers is None
+
+
+@pytest.mark.unit
+def test_html_table_body_is_json_with_content_type(expander, extractor):
+    client = FakeHttpClient()
+
+    _html(
+        expander,
+        extractor,
+        client,
+        {"body": {"name": "x", "n": "{{ 1 + 2 }}", "tags": ["a"]}},
+    )
+
+    assert json.loads(client.sent_body) == {"name": "x", "n": "3", "tags": ["a"]}
+    assert client.headers == {"Content-Type": "application/json"}
+
+
+@pytest.mark.unit
+def test_html_table_body_keeps_explicit_content_type(expander, extractor):
+    client = FakeHttpClient()
+
+    _html(
+        expander,
+        extractor,
+        client,
+        {"body": {"a": 1}, "content_type": "application/vnd.api+json"},
+    )
+
+    assert client.headers == {"Content-Type": "application/vnd.api+json"}
+
+
+@pytest.mark.unit
+def test_html_table_body_keeps_content_type_header(expander, extractor):
+    client = FakeHttpClient()
+
+    _html(
+        expander,
+        extractor,
+        client,
+        {"body": {"a": 1}, "headers": {"content-type": "text/plain"}},
+    )
+
+    assert client.headers == {"content-type": "text/plain"}
+
+
+@pytest.mark.unit
+def test_html_content_type_overrides_header_case_insensitively(expander, extractor):
+    client = FakeHttpClient()
+
+    _html(
+        expander,
+        extractor,
+        client,
+        {
+            "content_type": "text/xml",
+            "headers": {"content-type": "text/plain", "X-Id": "1"},
+        },
+    )
+
+    assert client.headers == {"X-Id": "1", "Content-Type": "text/xml"}
+
+
+@pytest.mark.unit
+def test_html_content_length_dropped_only_with_body(expander, extractor):
+    headers = {"Content-Length": "5", "X-Id": "1"}
+    with_body = FakeHttpClient()
+    without_body = FakeHttpClient()
+
+    _html(expander, extractor, with_body, {"body": "abc", "headers": headers})
+    _html(expander, extractor, without_body, {"headers": headers})
+
+    assert with_body.headers == {"X-Id": "1"}
+    assert without_body.headers == headers
+
+
+@pytest.mark.unit
+def test_html_headers_are_not_mutated(expander, extractor):
+    headers = {"Content-Length": "5", "content-type": "a/b"}
+    options = {"headers": headers, "body": "x", "content_type": "c/d"}
+
+    _html(expander, extractor, FakeHttpClient(), options)
+
+    assert headers == {"Content-Length": "5", "content-type": "a/b"}
+    assert options["headers"] is headers
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("raw", [False, "false", "no"])
+def test_html_allow_redirects_false(expander, extractor, raw):
+    client = FakeHttpClient()
+
+    _html(expander, extractor, client, {"allow_redirects": raw})
+
+    assert client.allow_redirects is False
+
+
+@pytest.mark.unit
+def test_html_allow_redirects_invalid_is_an_error(expander, extractor):
+    client = FakeHttpClient()
+
+    result = _html(expander, extractor, client, {"allow_redirects": "maybe"})
+
+    assert result.status == ResultStatus.ERROR
+    assert "invalid 'allow_redirects' value" in result.message
+    assert client.requested == []
+
+
+@pytest.mark.unit
+def test_html_json_value_over_post(expander, extractor):
+    client = FakeHttpClient(body='{"status": "created"}')
+
+    result = _html(
+        expander,
+        extractor,
+        client,
+        {"method": "POST", "body": {"a": 1}, "jq": ".status", "value": "created"},
+        cls=HtmlJsonValueTest,
+        kind="html_json_value",
+    )
+
+    assert result.status == ResultStatus.OK
+    assert client.method == "POST"
+
+
+@pytest.mark.unit
+def test_html_xxx_expects_redirect_when_not_followed(expander, extractor):
+    client = FakeHttpClient(status_code=302)
+
+    result = _html(
+        expander,
+        extractor,
+        client,
+        {"expected_status": 302, "allow_redirects": False},
+        cls=HtmlXxxTest,
+        kind="html_xxx",
+    )
+
+    assert result.status == ResultStatus.OK
+    assert client.allow_redirects is False
+
+
+@pytest.mark.unit
+def test_html_body_is_not_in_alert_messages(expander, extractor):
+    client = FakeHttpClient(status_code=500)
+
+    result = _html(expander, extractor, client, {"body": "s3cret"})
+
+    assert result.status == ResultStatus.ALERT
+    assert "s3cret" not in result.message
+
+
+@pytest.mark.unit
+def test_html_string_body_is_sent_as_utf8(expander, extractor):
+    client = FakeHttpClient()
+
+    result = _html(expander, extractor, client, {"body": "name=café€"})
+
+    assert result.status == ResultStatus.OK
+    assert client.sent_body == "name=café€".encode("utf-8")
+
+
+@pytest.mark.unit
+def test_html_table_body_with_non_json_value_is_an_error(expander, extractor):
+    client = FakeHttpClient()
+
+    result = _html(
+        expander, extractor, client, {"body": {"created": datetime(2026, 9, 30)}}
+    )
+
+    assert result.status == ResultStatus.ERROR
+    assert "invalid 'body' value" in result.message
+    assert client.requested == []
+
+
+@pytest.mark.unit
+def test_html_headers_that_is_not_a_table_is_an_error(expander, extractor):
+    client = FakeHttpClient()
+
+    result = _html(expander, extractor, client, {"headers": "X-Id: 1"})
+
+    assert result.status == ResultStatus.ERROR
+    assert "invalid 'headers' value" in result.message
+    assert client.requested == []

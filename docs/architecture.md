@@ -209,7 +209,7 @@ and static assets live in `reports/<name>/`, output goes to `output/<name>/`.
 | `connection_inspector.py` | read-only, secret-redacted view of `[connections]` behind the `connections` cli command |
 | `opensearch_service.py` | opensearch clients, same snapshot/restore contract |
 | `aws_service.py` | region/credentials for aws-signed opensearch |
-| `http_client.py` | requests wrapper; note `get_notification_http_client()` never disables tls |
+| `http_client.py` | requests wrapper; `HttpClient.request()` is the entry point for the web tests (method, body, redirects); note `get_notification_http_client()` never disables tls |
 | `ping_client.py` | icmp ping via the system tool |
 | `custom_test_loader.py` | imports modules from `custom_tests_path` for `[test.custom.<module>]` |
 | `helpers.py` | small shared utilities, including `parse_interval` for the `"5 min"` style delays |
