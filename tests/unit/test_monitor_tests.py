@@ -1482,6 +1482,29 @@ def test_html_content_type_overrides_header_case_insensitively(expander, extract
 
 
 @pytest.mark.unit
+def test_html_content_type_alias_with_hyphen(expander, extractor):
+    client = FakeHttpClient()
+
+    _html(expander, extractor, client, {"content-type": "text/xml"})
+
+    assert client.headers == {"Content-Type": "text/xml"}
+
+
+@pytest.mark.unit
+def test_html_content_type_wins_over_hyphen_alias(expander, extractor):
+    client = FakeHttpClient()
+
+    _html(
+        expander,
+        extractor,
+        client,
+        {"content_type": "text/xml", "content-type": "text/plain"},
+    )
+
+    assert client.headers == {"Content-Type": "text/xml"}
+
+
+@pytest.mark.unit
 def test_html_content_length_dropped_only_with_body(expander, extractor):
     headers = {"Content-Length": "5", "X-Id": "1"}
     with_body = FakeHttpClient()

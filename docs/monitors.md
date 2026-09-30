@@ -318,7 +318,8 @@ the connection's `default_index`. `html_*` tests accept `headers`, `method`,
   (surrounding whitespace is stripped, case is not changed) and not restricted
   to a known list, so unusual methods can be tested. Empty is an error; a
   method the http library refuses is a normal request failure.
-- `content_type` - optional `Content-Type` header. It wins over any
+- `content_type` - optional `Content-Type` header; `content-type` is accepted
+  as an alias (`content_type` wins if both are set). It wins over any
   `Content-Type` key in `headers` (matched case insensitively).
 - `body` - optional request body, none by default. The whole value goes
   through jinja expansion (`{{ epoch }}`, `{{ now_iso_format }}` ...).

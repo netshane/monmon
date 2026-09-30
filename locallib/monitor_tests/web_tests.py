@@ -85,7 +85,7 @@ class WebTestBase(MonitorTest):
         """Build the request body and headers, applying the precedence rules.
 
         The user's `headers` table is copied, never mutated.  `content_type`
-        replaces any `Content-Type` header; a table / array body is sent as
+        (or its alias `content-type`) replaces any `Content-Type` header; a table / array body is sent as
         json (with `application/json` unless a content type was given); any
         `Content-Length` header is dropped when a body is sent.
         """
@@ -112,6 +112,8 @@ class WebTestBase(MonitorTest):
             body = str(raw_body).encode("utf-8")
 
         content_type = self.option("content_type")
+        if content_type is None:
+            content_type = self.option("content-type")
         if content_type:
             self._drop_header(headers, "content-type")
             headers["Content-Type"] = str(content_type)
