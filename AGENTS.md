@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 ## Architecture
 - `docs/architecture.md` - read this first when implementing a feature or
@@ -40,11 +40,13 @@ Configured in `pyproject.toml`:
 - commit messages should be suitable for a public changelog.
 
 ## claude behavior
-- when implementing a new feature from a file specification, add a summary of the final implmentation to the end of the file.  Include the claude session id in the summary.
+ - spec and feature documents are stored in `docs/specs`
+ - implementation plan documents are stored in `docs/plans`
+ - If a plan file is provided, write a summary of the implementation in the plan upon completion of  implementation.
 
  ## Memory
- - create notes and lessons learned in the `docs/memory/` directory.  Use MEMORY.md as the main file.
+ - create notes and lessons learned in the `docs/agent/memory/` directory.  Use MEMORY.md as the main file.
  - notes in this file should be very short and concise, capturing only the essential information and key takeaways.
- - Larger notes or explanations should be stored in separate files within the `docs/memory/` directory, and referenced from MEMORY.md as needed.
+ - Larger notes or explanations should be stored in separate files within the `docs/agent/memory/` directory, and referenced from MEMORY.md as needed.
 
  - If a spec file is provided, write a summary of the implementation in the spec upon completion of implementation.
