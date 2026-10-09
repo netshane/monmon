@@ -32,10 +32,16 @@ class HttpClient:
         headers: dict | None = None,
         verify_ssl: bool | None = None,
         ca_bundle: str | None = None,
+        timeout_seconds: float | None = None,
     ) -> HttpResponse:
         """Fetch `url` with GET, following redirects."""
         return self.request(
-            "GET", url, headers=headers, verify_ssl=verify_ssl, ca_bundle=ca_bundle
+            "GET",
+            url,
+            headers=headers,
+            verify_ssl=verify_ssl,
+            ca_bundle=ca_bundle,
+            timeout_seconds=timeout_seconds,
         )
 
     def request(
@@ -47,15 +53,18 @@ class HttpClient:
         verify_ssl: bool | None = None,
         ca_bundle: str | None = None,
         allow_redirects: bool = True,
+        timeout_seconds: float | None = None,
     ) -> HttpResponse:
         """Send a `method` request to `url`.
 
         `method` is passed through untouched.  `verify_ssl` overrides the
         client default for this request only - `None` means "use the client
-        default".  `ca_bundle` is a path to a PEM file to verify against
+        default".  `timeout_seconds` overrides the client timeout the same way.
+        `ca_bundle` is a path to a PEM file to verify against
         instead of the system store, and is ignored when verification is off.
         """
         verify = self._verify(verify_ssl, ca_bundle)
+        timeout = self.timeout_seconds if timeout_seconds is None else timeout_seconds
 
         with warnings.catch_warnings():
             if verify is False:
@@ -65,7 +74,7 @@ class HttpClient:
             response = requests.request(
                 method,
                 url,
-                timeout=self.timeout_seconds,
+                timeout=timeout,
                 allow_redirects=allow_redirects,
                 verify=verify,
                 headers=headers,

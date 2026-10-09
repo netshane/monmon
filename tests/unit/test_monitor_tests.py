@@ -189,8 +189,14 @@ class FakeOpenSearchFactory:
 
 class FakeHttpClient:
     def __init__(
-        self, status_code: int = 200, body: str = "{}", raises: Exception | None = None
+        self,
+        status_code: int = 200,
+        body: str = "{}",
+        raises: Exception | None = None,
+        timeout_seconds: float = 30,
     ):
+        self.timeout_seconds = timeout_seconds
+        self.sent_timeout: float | None = None
         self.status_code = status_code
         self.body = body
         self.raises = raises
@@ -202,9 +208,15 @@ class FakeHttpClient:
         headers: dict | None = None,
         verify_ssl: bool | None = None,
         ca_bundle: str | None = None,
+        timeout_seconds: float | None = None,
     ) -> HttpResponse:
         return self.request(
-            "GET", url, headers=headers, verify_ssl=verify_ssl, ca_bundle=ca_bundle
+            "GET",
+            url,
+            headers=headers,
+            verify_ssl=verify_ssl,
+            ca_bundle=ca_bundle,
+            timeout_seconds=timeout_seconds,
         )
 
     def request(
@@ -216,8 +228,10 @@ class FakeHttpClient:
         verify_ssl: bool | None = None,
         ca_bundle: str | None = None,
         allow_redirects: bool = True,
+        timeout_seconds: float | None = None,
     ) -> HttpResponse:
         self.requested.append(url)
+        self.sent_timeout = timeout_seconds
         self.method = method
         self.headers = headers
         self.sent_body = body
@@ -1625,3 +1639,97 @@ def test_html_headers_that_is_not_a_table_is_an_error(expander, extractor):
     assert result.status == ResultStatus.ERROR
     assert "invalid 'headers' value" in result.message
     assert client.requested == []
+
+
+# -- html timeout ----------------------------------------------------------
+
+_TIMEOUT_CASES = [
+    (HtmlStatusTest, "html_200", {}),
+    (HtmlXxxTest, "html_xxx", {"expected_status": 401}),
+    (HtmlJsonExistsTest, "html_json_exists", {"jq": "a"}),
+    (HtmlJsonValueTest, "html_json_value", {"jq": "a", "value": 1}),
+    (HtmlJsonReportTest, "html_json_report", {"jq": ["a"]}),
+]
+
+
+def _timeout_config(test_type: str, options: dict, **extra) -> TestConfig:
+    return TestConfig(
+        test_type, "web.slow", {"url": "https://example.com/", **options, **extra}
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("cls", "test_type", "options"), _TIMEOUT_CASES)
+def test_html_per_test_timeout_alerts(expander, extractor, cls, test_type, options):
+    client = FakeHttpClient(raises=requests.exceptions.ReadTimeout("slow"))
+    config = _timeout_config(test_type, options, timeout_seconds=2.5)
+
+    result = cls(config, expander, client, extractor).run()
+
+    assert client.sent_timeout == 2.5
+    assert result.status == ResultStatus.ALERT
+    assert result.alerts[0].name == "https://example.com/"
+    assert result.alerts[0].message == "https://example.com/ timed out after 2.5s"
+    assert result.alerts[0].threshold == 2.5
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("cls", "test_type", "options"), _TIMEOUT_CASES)
+def test_html_global_timeout_alerts(expander, extractor, cls, test_type, options):
+    client = FakeHttpClient(
+        raises=requests.exceptions.ConnectTimeout("slow"), timeout_seconds=30
+    )
+    config = _timeout_config(test_type, options)
+
+    result = cls(config, expander, client, extractor).run()
+
+    assert client.sent_timeout is None
+    assert result.status == ResultStatus.ALERT
+    assert result.alerts[0].message == "https://example.com/ timed out after 30s"
+    assert result.alerts[0].threshold == 30
+
+
+@pytest.mark.unit
+def test_html_timeout_is_jinja_expanded_and_accepts_strings(expander, extractor):
+    client = FakeHttpClient()
+    config = _timeout_config("html_200", {}, timeout_seconds="{{ 3 }}")
+
+    HtmlStatusTest(config, expander, client, extractor).run()
+
+    assert client.sent_timeout == 3.0
+
+
+@pytest.mark.unit
+def test_html_timeout_unset_passes_none(expander, extractor):
+    client = FakeHttpClient()
+
+    result = HtmlStatusTest(
+        _timeout_config("html_200", {}), expander, client, extractor
+    ).run()
+
+    assert result.status == ResultStatus.OK
+    assert client.sent_timeout is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("raw", [0, -1, "abc", True, "", "inf", "nan", 10**400])
+def test_html_timeout_invalid_value_is_an_error(expander, extractor, raw):
+    client = FakeHttpClient()
+    config = _timeout_config("html_200", {}, timeout_seconds=raw)
+
+    result = HtmlStatusTest(config, expander, client, extractor).run()
+
+    assert result.status == ResultStatus.ERROR
+    assert "invalid 'timeout_seconds' value" in result.message
+    assert client.requested == []
+
+
+@pytest.mark.unit
+def test_html_200_still_errors_on_non_timeout_failures(expander, extractor):
+    client = FakeHttpClient(raises=requests.exceptions.ConnectionError("boom"))
+
+    result = HtmlStatusTest(
+        _timeout_config("html_200", {}), expander, client, extractor
+    ).run()
+
+    assert result.status == ResultStatus.ERROR

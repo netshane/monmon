@@ -15,6 +15,15 @@ from ..value_expander import ValueExpander
 from .monitor_test import MonitorTest
 
 
+class FetchTimeout(Exception):
+    """The request exceeded its timeout (per-test or client default)."""
+
+    def __init__(self, url: str, seconds: float):
+        super().__init__(f"{url} timed out after {seconds:g}s")
+        self.url = url
+        self.seconds = seconds
+
+
 class WebTestBase(MonitorTest):
     def __init__(
         self,
@@ -33,17 +42,40 @@ class WebTestBase(MonitorTest):
         body, headers = self._body_and_headers()
         verify_ssl = self._verify_ssl()
         ca_bundle = self.option("ca_bundle")
+        timeout = self._timeout()
 
-        self.response = self.http_client.request(
-            method,
-            url,
-            headers=headers,
-            body=body,
-            verify_ssl=verify_ssl,
-            ca_bundle=str(ca_bundle) if ca_bundle else None,
-            allow_redirects=self._allow_redirects(),
-        )
+        try:
+            self.response = self.http_client.request(
+                method,
+                url,
+                headers=headers,
+                body=body,
+                verify_ssl=verify_ssl,
+                ca_bundle=str(ca_bundle) if ca_bundle else None,
+                allow_redirects=self._allow_redirects(),
+                timeout_seconds=timeout,
+            )
+        except requests.exceptions.Timeout as e:
+            effective = (
+                timeout if timeout is not None else self.http_client.timeout_seconds
+            )
+            raise FetchTimeout(url, effective) from e
         return self.response
+
+    def try_fetch(self, result: TestResult):
+        """Fetch, turning a timeout into an alert.
+
+        Returns `None` (after alerting) when the request timed out, so callers
+        only need to handle the success path.
+        """
+        try:
+            return self.fetch()
+        except FetchTimeout as e:
+            self.add_alert(
+                result,
+                Alert(name=e.url, message=str(e), threshold=e.seconds),
+            )
+            return None
 
     def _invalid(self, option: str, value, expected: str) -> ValueError:
         return ValueError(
@@ -69,6 +101,20 @@ class WebTestBase(MonitorTest):
             raise self._invalid("verify_ssl", raw, "true or false")
 
         return verify_ssl
+
+    def _timeout(self) -> float | None:
+        raw = self.option("timeout_seconds")
+        if raw is None:
+            return None
+
+        try:
+            timeout = float(raw) if not isinstance(raw, bool) else None
+        except (TypeError, ValueError, OverflowError):
+            timeout = None
+        if timeout is None or not timeout > 0 or timeout == float("inf"):
+            raise self._invalid("timeout_seconds", raw, "a number greater than 0")
+
+        return timeout
 
     def _allow_redirects(self) -> bool:
         raw = self.option("allow_redirects")
@@ -139,7 +185,9 @@ class WebTestBase(MonitorTest):
         callers only need to handle the success path. `self.response` is set
         either way, for callers that need the url in their own messages.
         """
-        response = self.fetch()
+        response = self.try_fetch(result)
+        if response is None:
+            return None
 
         if response.status_code != 200:
             self.add_alert(
@@ -162,7 +210,9 @@ class HtmlStatusTest(WebTestBase):
 
     def execute(self, result: TestResult):
         expected = int(self.option("status_code", 200) or 200)
-        response = self.fetch()
+        response = self.try_fetch(result)
+        if response is None:
+            return
         result.value = response.status_code
 
         if response.status_code != expected:
@@ -196,7 +246,7 @@ class HtmlXxxTest(WebTestBase):
         expected = int(self.required_option("expected_status"))
 
         try:
-            response = self.fetch()
+            response = self.try_fetch(result)
         except requests.exceptions.RequestException as e:
             self.add_alert(
                 result,
@@ -207,6 +257,8 @@ class HtmlXxxTest(WebTestBase):
             )
             return
 
+        if response is None:
+            return
         result.value = response.status_code
 
         if response.status_code != expected:

@@ -1,0 +1,1 @@
+- `requests` `Timeout` in html tests is an alert via `FetchTimeout` in `web_tests.py`; other `RequestException`s still error (`html_xxx` alerts).

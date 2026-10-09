@@ -105,3 +105,21 @@ def test_get_is_a_get_request_following_redirects(requests_request):
     assert call["allow_redirects"] is True
     assert call["data"] is None
     assert response.status_code == 200
+
+
+@pytest.mark.unit
+def test_request_timeout_override_wins_over_client_default(requests_request):
+    client = HttpClient(timeout_seconds=30)
+    client.request("GET", "https://example.com", timeout_seconds=2.5)
+    client.get("https://example.com", timeout_seconds=4)
+
+    assert [c["timeout"] for c in requests_request] == [2.5, 4]
+
+
+@pytest.mark.unit
+def test_request_timeout_none_uses_client_default(requests_request):
+    client = HttpClient(timeout_seconds=30)
+    client.request("GET", "https://example.com")
+    client.get("https://example.com", timeout_seconds=None)
+
+    assert [c["timeout"] for c in requests_request] == [30, 30]

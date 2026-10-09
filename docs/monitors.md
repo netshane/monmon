@@ -312,7 +312,8 @@ endpoint expected to require auth and return 401).
 
 `opensearch_flag` / `elasticsearch_report` also accept an `index` to override
 the connection's `default_index`. `html_*` tests accept `headers`, `method`,
-`content_type`, `body`, `allow_redirects`, `verify_ssl` and `ca_bundle`:
+`content_type`, `body`, `allow_redirects`, `timeout_seconds`, `verify_ssl` and
+`ca_bundle`:
 
 - `method` - the http method, default `GET`. Passed through exactly as written
   (surrounding whitespace is stripped, case is not changed) and not restricted
@@ -335,7 +336,13 @@ the connection's `default_index`. `html_*` tests accept `headers`, `method`,
 - `allow_redirects` - default `true`. `false` returns the 3xx response itself,
   e.g. to test with `html_xxx` that a page redirects. Note that when following
   a 301/302/303 `requests` turns a POST into a GET and drops the body.
-
+- `timeout_seconds` - number greater than 0 (int or float, jinja expanded);
+  anything else is an error. Left unset the test uses `[default.http]
+  timeout_seconds`. A request that hits the `requests` timeout (connect or read,
+  not total download time) - this one or the global default - is an alert named
+  after the url, `<url> timed out after <n>s`, with the timeout as `threshold`,
+  not an error. Other connection failures are unchanged: an error for
+  `html_200` / `html_json_*`, "no response received" alert for `html_xxx`.
 - `verify_ssl` - left unset the test follows the `[http] verify_ssl` setting.
   `false` skips certificate verification for this test only (self signed,
   expired and wrong-host certificates are all accepted, and the
